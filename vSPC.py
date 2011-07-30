@@ -128,6 +128,16 @@ def hexdump(data):
     return reduce(lambda x,y: x + ('%x' % ord(y)), data, '')
 
 class FixedTelnet(Telnet):
+    '''
+    FixedTelnet is a bug-fix override of the base Telnet class. In
+    particular, base Telnet does not properly handle NULL characters,
+    and in general is a little sloppy for BINARY mode.
+
+    LICENSING: The code for this class was based on the base Telnet
+    class definition from Python 2.6, and as such is covered by that
+    GPLv2 compatible license:
+    http://www.python.org/download/releases/2.6/license/
+    '''
     def process_rawq(self):
         """Transfer from raw queue to cooked queue.
 

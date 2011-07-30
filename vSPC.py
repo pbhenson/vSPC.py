@@ -40,7 +40,7 @@ This server is based on publicly available documentation:
 
 __author__ = "Zachary M. Loafman"
 __copyright__ = "Copyright (C) 2011 Isilon Systems LLC."
-__revision__ = "$Revision: 195628 $"
+__revision__ = "$Id$"
 
 BASENAME='vSPC.py'
 
@@ -779,9 +779,6 @@ def daemonize():
     os.chdir('/')
     os.umask(0)
 
-def get_revision():
-    return "r" + __revision__.split()[1]
-
 def usage():
     sys.stderr.write('''\
 %s (%s)
@@ -829,7 +826,7 @@ Server (with --server):
     --stdout: Log to stdout instead of syslog
     --no-fork: Don't daemonize
     -d|--debug: Debug mode (turns up logging and implies --stdout --no-fork)
-''' % (BASENAME, get_revision(), BASENAME, ADMIN_PORT, PROXY_PORT,
+''' % (BASENAME, __revision__, BASENAME, ADMIN_PORT, PROXY_PORT,
        VM_PORT_START, BASENAME, BASENAME, BASENAME,
        socket.gethostname(), PROXY_PORT, BASENAME, BASENAME,
        VM_EXPIRE_TIME, ADMIN_PORT, PROXY_PORT, VM_PORT_START))

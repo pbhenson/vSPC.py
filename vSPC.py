@@ -71,10 +71,16 @@ VM_PORT_START = 50000
 # port number / listener open with no VMware or client connections
 VM_EXPIRE_TIME = 24*3600 
 
+# Query protocol
 Q_VERS = 1
 Q_NAME = 'name'
 Q_UUID = 'uuid'
 Q_PORT = 'port'
+
+# How long to wait for an option response. Any option response resets
+# the counter. This is mainly to deal with "raw" connections (like
+# gdb) that don't negotiate telnet options at all.
+UNACK_TIMEOUT=0.5
 
 LISTEN_BACKLOG = 5
 
@@ -222,6 +228,7 @@ class TelnetServer(FixedTelnet):
         self.client_opts = list(client_opts) # What do THEY do?
         self.client_opts_accepted = list(client_opts)
         self.unacked = []
+        self.last_ack = time.time()
 
         for opt in self.server_opts:
             logging.debug("sending WILL %d" % ord(opt))
@@ -245,6 +252,7 @@ class TelnetServer(FixedTelnet):
             msg_is_reply = False
             if (WILL, opt) in self.unacked:
                 msg_is_reply = True
+                self.last_ack = time.time()
                 self.unacked.remove((WILL, opt))
 
             if cmd == DONT:
@@ -268,6 +276,7 @@ class TelnetServer(FixedTelnet):
             msg_is_reply = False
             if (DO, opt) in self.unacked:
                 msg_is_reply = True
+                self.last_ack = time.time()
                 self.unacked.remove((DO, opt))
 
             if cmd == WONT:
@@ -299,8 +308,13 @@ class TelnetServer(FixedTelnet):
     def negotiation_done(self):
         self.process_available()
         if self.unacked:
-            logging.debug("still waiting for %s" %
-                          map(lambda (x,y): (ord(x), ord(y)), self.unacked))
+            desc = map(lambda (x,y): (ord(x), ord(y)), self.unacked)
+            if time.time() > self.last_ack + UNACK_TIMEOUT:
+                logging.debug("timeout waiting for commands %s" % desc)
+                self.unacked = []
+            else:
+                logging.debug("still waiting for %s" % desc)
+
         return not self.unacked
 
     def read_after_negotiate(self):

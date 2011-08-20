@@ -536,57 +536,73 @@ class vSPC(Selector, VMExtHandler):
         logging.debug('uuid %s new client, %d active clients'
                       % (client.uuid, len(vm.clients)))
 
+    def abort_vm_connection(self, vt):
+        if vt.uuid:
+            logging.debug('uuid %s VM socket closed' % vt.uuid)
+            self.vms[vt.uuid].vts.remove(vt)
+            self.stamp_orphan(self.vms[vt.uuid])
+        else:
+            logging.debug('unidentified VM socket closed' % vt.uuid)
+            self.limbo.remove(vt)
+        self.del_reader(vt)
+
     def new_vm_data(self, vt):
+        if not vt.negotiation_done():
+            return
+
+        # Queue VM data during vmotion
+        if vt.uuid and self.vms[vt.uuid].vmotion:
+            return
+
+        s = None
         try:
-            if not vt.negotiation_done():
-                return
-
-            # Queue VM data during vmotion
-            if vt.uuid and self.vms[vt.uuid].vmotion:
-                return
-
             s = vt.read_very_lazy()
-            if not s: # May only be option data
-                return
+        except (EOFError, IOError, socket.error):
+            self.abort_vm_connection(vt)
 
-            if vt in self.limbo:
-                # In limbo, no one can hear you scream
-                return
-            assert vt.uuid # Non-limbo VMs have a uuid
+        if not s: # May only be option data, or exception
+            return
 
-            for cl in self.vms[vt.uuid].clients:
+        if vt in self.limbo:
+            # In limbo, no one can hear you scream
+            return
+        assert vt.uuid # Non-limbo VMs have a uuid
+
+        for cl in self.vms[vt.uuid].clients:
+            try:
                 cl.sock.sendall(s)
-        except EOFError:
-            if vt.uuid:
-                logging.debug('uuid %s VM socket closed' % vt.uuid)
-                self.vms[vt.uuid].vts.remove(vt)
-                self.stamp_orphan(self.vms[vt.uuid])
-            else:
-                logging.debug('unidentified VM socket closed' % vt.uuid)
-                self.limbo.remove(vt)
-            self.del_reader(vt)
+            except (EOFError, IOError, socket.error) as e:
+                logging.debug('cl.socket send error: %s' % (str(e)))
+
+    def abort_client_connection(self, client):
+        logging.debug('uuid %s client socket closed, %d active clients' %
+                      (client.uuid, len(self.vms[client.uuid].clients)-1))
+        self.vms[client.uuid].clients.remove(client)
+        self.stamp_orphan(self.vms[client.uuid])
+        self.del_reader(client)
 
     def new_client_data(self, client):
+        if not client.negotiation_done():
+            return
+
+        # Queue VM data during vmotion
+        if self.vms[client.uuid].vmotion:
+            return
+
+        s = None
         try:
-            if not client.negotiation_done():
-                return
-
-            # Queue VM data during vmotion
-            if self.vms[client.uuid].vmotion:
-                return
-
             s = client.read_very_lazy()
-            if not s: # May only be option data
-                return
+        except (EOFError, IOError, socket.error):
+            self.abort_client_connection(client)
 
-            for vt in self.vms[client.uuid].vts:
+        if not s: # May only be option data, or exception
+            return
+
+        for vt in self.vms[client.uuid].vts:
+            try:
                 vt.sock.sendall(s)
-        except EOFError:
-            logging.debug('uuid %s client socket closed, %d active clients' % 
-                          (client.uuid, len(self.vms[client.uuid].clients)-1))
-            self.vms[client.uuid].clients.remove(client)
-            self.stamp_orphan(self.vms[client.uuid])
-            self.del_reader(client)
+            except (EOFError, IOError, socket.error) as e:
+                logging.debug('cl.socket send error: %s' % (str(e)))
 
     def handle_vc_uuid(self, vt):
         assert vt in self.limbo

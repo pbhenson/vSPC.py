@@ -869,9 +869,9 @@ if __name__ == '__main__':
 
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], 'a:hdp:r:s',
-                                       ['help', 'debug', 'admin-port=', 
+                                       ['help', 'debug', 'admin-port=',
                                         'proxy-port=', 'port-range-start=', 'server',
-                                        'stdout', 'no-fork'])
+                                        'stdout', 'no-fork', 'vm-expire-time='])
         for o,a in opts:
             if o in ['-h', '--help']:
                 usage()
@@ -888,6 +888,10 @@ if __name__ == '__main__':
                 vm_port_start = int(a)
             elif o in ('-s', '--server'):
                 server_mode = True
+            elif o in ('--vm-expire-time'):
+                vm_expire_time = int(a)
+            elif o in ('--no-fork'):
+                fork = False
             elif o == '--stdout':
                 syslog = False
             else:

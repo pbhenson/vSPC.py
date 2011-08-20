@@ -130,6 +130,13 @@ EXT_SUPPORTED = {
     GET_VM_NAME : 'get_vm_name', # Proxy->VM
 }
 
+NOT_VMWARE = '''\
+\r
+You are trying to connect to the vSPC.py proxy port with a normal\r
+telnet client. This port is intended for VMware connections only.\r
+\r
+'''
+
 def hexdump(data):
     return reduce(lambda x,y: x + ('%x' % ord(y)), data, '')
 
@@ -424,7 +431,7 @@ class VMTelnetServer(TelnetServer):
             self._send_vmware_initial()
             # Fall through so VMWARE_EXT will get removed from unacked
         elif cmd == WONT and opt == VMWARE_EXT:
-            self.sock.sendall('Not VMWare. Go away.\r\n')
+            self.sock.sendall(NOT_VMWARE)
             self.close()
 
         if not cmd == SE or not self.sbdataq[:1] == VMWARE_EXT:
@@ -542,7 +549,7 @@ class vSPC(Selector, VMExtHandler):
             self.vms[vt.uuid].vts.remove(vt)
             self.stamp_orphan(self.vms[vt.uuid])
         else:
-            logging.debug('unidentified VM socket closed' % vt.uuid)
+            logging.debug('unidentified VM socket closed')
             self.limbo.remove(vt)
         self.del_reader(vt)
 

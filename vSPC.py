@@ -554,7 +554,13 @@ class vSPC(Selector, VMExtHandler):
         self.del_reader(vt)
 
     def new_vm_data(self, vt):
-        if not vt.negotiation_done():
+        neg_done = False
+        try:
+            neg_done = vt.negotiation_done()
+        except (EOFError, IOError, socket.error):
+            self.abort_vm_connection(vt)
+
+        if not neg_done:
             return
 
         # Queue VM data during vmotion
@@ -589,7 +595,13 @@ class vSPC(Selector, VMExtHandler):
         self.del_reader(client)
 
     def new_client_data(self, client):
-        if not client.negotiation_done():
+        neg_done = False
+        try:
+            neg_done = client.negotiation_done()
+        except (EOFError, IOError, socket.error):
+            self.abort_client_connection(client)
+
+        if not neg_done:
             return
 
         # Queue VM data during vmotion
@@ -719,9 +731,10 @@ class vSPC(Selector, VMExtHandler):
             try:
                 pickle.dump(Exception("I don't understand"), sockfile)
                 sockfile.flush()
-                return
             except:
                 pass
+            finally:
+                return
 
         vers = min(Q_VERS, client_vers)
         logging.debug("version %d query", vers)

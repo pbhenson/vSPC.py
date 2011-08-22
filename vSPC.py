@@ -236,6 +236,7 @@ class TelnetServer(FixedTelnet):
         self.client_opts_accepted = list(client_opts)
         self.unacked = []
         self.last_ack = time.time()
+        self.send_buffer = ''
 
         for opt in self.server_opts:
             logging.debug("sending WILL %d" % ord(opt))
@@ -328,6 +329,12 @@ class TelnetServer(FixedTelnet):
         if not self.negotiation_done():
             return ''
         return self.read_very_lazy()
+
+    def send_buffered(self, s = ''):
+        self.send_buffer += s
+        nbytes = self.sock.send(self.send_buffer)
+        self.send_buffer = self.send_buffer[nbytes:]
+        return len(self.send_buffer) > 0
 
 class VMExtHandler:
     def handle_vmotion_begin(self, ts, data):
@@ -467,18 +474,37 @@ def openport(port):
 class Selector:
     def __init__(self):
         self.read_handlers = {}
+        self.write_handlers = {}
 
     def add_reader(self, stream, func):
         self.read_handlers[stream] = func
 
     def del_reader(self, stream):
-        del self.read_handlers[stream]
+        try:
+            del self.read_handlers[stream]
+        except KeyError:
+            pass
+
+    def add_writer(self, stream, func):
+        self.write_handlers[stream] = func
+
+    def del_writer(self, stream):
+        try:
+            del self.write_handlers[stream]
+        except KeyError:
+            pass
+
+    def del_all(self, stream):
+        self.del_reader(stream)
+        self.del_writer(stream)
 
     def run_once(self, timeout = None):
         (readers, writers, exceptions) = \
             select.select(self.read_handlers.keys(), [], [], timeout)
         for reader in readers:
             self.read_handlers[reader](reader)
+        for writer in writers:
+            self.write_handlers[writer](writer)
 
     def run_forever(self):
         while True:
@@ -521,6 +547,12 @@ class vSPC(Selector, VMExtHandler):
         self.ports = {}
         self.vmotions = {}
 
+    def send_buffered(self, ts, s = ''):
+        if ts.send_buffered(s):
+            self.add_writer(ts, self.send_buffered)
+        else:
+            self.del_writer(ts)
+
     def new_vm_connection(self, listener):
         sock = listener.accept()[0]
         sock.setblocking(0)
@@ -551,7 +583,7 @@ class vSPC(Selector, VMExtHandler):
         else:
             logging.debug('unidentified VM socket closed')
             self.limbo.remove(vt)
-        self.del_reader(vt)
+        self.del_all(vt)
 
     def new_vm_data(self, vt):
         neg_done = False
@@ -581,9 +613,11 @@ class vSPC(Selector, VMExtHandler):
             return
         assert vt.uuid # Non-limbo VMs have a uuid
 
+        # logging.debug('new_vm_data %s: %s' % (vt.uuid, repr(s)))
+
         for cl in self.vms[vt.uuid].clients:
             try:
-                cl.sock.sendall(s)
+                self.send_buffered(cl, s)
             except (EOFError, IOError, socket.error) as e:
                 logging.debug('cl.socket send error: %s' % (str(e)))
 
@@ -592,7 +626,7 @@ class vSPC(Selector, VMExtHandler):
                       (client.uuid, len(self.vms[client.uuid].clients)-1))
         self.vms[client.uuid].clients.remove(client)
         self.stamp_orphan(self.vms[client.uuid])
-        self.del_reader(client)
+        self.del_all(client)
 
     def new_client_data(self, client):
         neg_done = False
@@ -617,9 +651,11 @@ class vSPC(Selector, VMExtHandler):
         if not s: # May only be option data, or exception
             return
 
+        # logging.debug('new_client_data %s: %s' % (client.uuid, repr(s)))
+
         for vt in self.vms[client.uuid].vts:
             try:
-                vt.sock.sendall(s)
+                self.send_buffered(vt, s)
             except (EOFError, IOError, socket.error) as e:
                 logging.debug('cl.socket send error: %s' % (str(e)))
 
@@ -772,7 +808,7 @@ class vSPC(Selector, VMExtHandler):
 
             logging.debug('expired VM with uuid %s, port %d' 
                           % (uuid, vm.port))
-            self.del_reader(vm)
+            self.del_all(vm)
             del vm.listener
             self.vm_port_next = min(vm.port, self.vm_port_next)
             del self.ports[vm.port]

@@ -618,7 +618,7 @@ class vSPC(Selector, VMExtHandler):
         for cl in self.vms[vt.uuid].clients:
             try:
                 self.send_buffered(cl, s)
-            except (EOFError, IOError, socket.error) as e:
+            except (EOFError, IOError, socket.error), e:
                 logging.debug('cl.socket send error: %s' % (str(e)))
 
     def abort_client_connection(self, client):
@@ -656,7 +656,7 @@ class vSPC(Selector, VMExtHandler):
         for vt in self.vms[client.uuid].vts:
             try:
                 self.send_buffered(vt, s)
-            except (EOFError, IOError, socket.error) as e:
+            except (EOFError, IOError, socket.error), e:
                 logging.debug('cl.socket send error: %s' % (str(e)))
 
     def handle_vc_uuid(self, vt):
@@ -787,7 +787,7 @@ class vSPC(Selector, VMExtHandler):
             else:
                 pickle.dump(Exception('No common version'), sockfile)
             sockfile.flush()
-        except Exception as e:
+        except Exception, e:
             logging.debug('finish_query exception: %s' % str(e))
 
     def collect_orphans(self):
@@ -836,7 +836,9 @@ class vSPC(Selector, VMExtHandler):
         self.run_forever()
 
 def do_query(host, port):
-    sockfile = socket.create_connection((host, port)).makefile()
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((host, port))
+    sockfile = s.makefile()
 
     # Trade versions
     pickle.dump(Q_VERS, sockfile)
@@ -999,5 +1001,5 @@ if __name__ == '__main__':
 
     try:
         vSPC(proxy_port, admin_port, vm_port_start, vm_expire_time).serve()
-    except Exception as e:
+    except Exception, e:
         logging.exception("Top level exception caught")

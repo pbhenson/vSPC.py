@@ -733,8 +733,9 @@ class vSPC(Selector, VMExtHandler):
     def handle_vmotion_abort(self, vt):
         logging.debug('uuid %s vmotion abort' % vt.uuid)
         vm = self.vms[vt.uuid]
-        del self.vmotions[vm.vmotion]
-        vm.vmotion = None
+        if vm.vmotion:
+            del self.vmotions[vm.vmotion]
+            vm.vmotion = None
 
     def check_orphan(self, vm):
         return len(vm.vts) == 0 and len(vm.clients) == 0
@@ -813,6 +814,9 @@ class vSPC(Selector, VMExtHandler):
             self.vm_port_next = min(vm.port, self.vm_port_next)
             del self.ports[vm.port]
             del self.vms[uuid]
+            if vm.vmotion:
+                del self.vmotions[vm.vmotion]
+                vm.vmotion = None
             del vm
 
     def new_vm_port(self, vm):

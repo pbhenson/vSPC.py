@@ -535,6 +535,11 @@ class vSPCBackendMemory:
 
         self.hook_queue = Queue.Queue()
 
+    def setup(self, args):
+        if args != '':
+            print "%s takes no arguments" % str(self.__class__)
+            sys.exit(1)
+
     def _start_thread(self, f):
         th = threading.Thread(target = f)
         th.daemon = True
@@ -993,6 +998,26 @@ def do_query(host, port):
                          "which we don't understand. Bad!" % vers)
         sys.exit(4)
 
+def get_backend_type(shortname):
+    name = "vSPCBackend" + shortname
+    if globals().has_key(name):
+        backend_type = globals()[name]
+    else:
+        try:
+            module = __import__(name)
+        except ImportError:
+            print "No builtin backend type %s found, no appropriate class " \
+                "file found (looking for %s.py)" % (shortname, name)
+            sys.exit(1)
+
+        try:
+            backend_type = getattr(module, name)
+        except AttributeError:
+            print "Backend module %s loaded, but class %s not found" % (name, name)
+            sys.exit(1)
+
+    return backend_type
+
 def daemonize():
     '''
     Daemonize, based on http://code.activestate.com/recipes/278731-creating-a-daemon-the-python-way/
@@ -1073,12 +1098,16 @@ if __name__ == '__main__':
     syslog = True
     fork = True
     server_mode = False
+    backend_type_name = 'Memory'
+    backend_args = ''
 
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], 'a:hdp:r:s',
                                        ['help', 'debug', 'admin-port=',
-                                        'proxy-port=', 'port-range-start=', 'server',
-                                        'stdout', 'no-fork', 'vm-expire-time='])
+                                        'proxy-port=', 'port-range-start=',
+                                        'server', 'stdout', 'no-fork',
+                                        'vm-expire-time=',
+                                        'backend=', 'backend-args='])
         for o,a in opts:
             if o in ['-h', '--help']:
                 usage()
@@ -1099,6 +1128,10 @@ if __name__ == '__main__':
                 vm_expire_time = int(a)
             elif o in ('--no-fork'):
                 fork = False
+            elif o in ('--backend'):
+                backend_type_name = a
+            elif o in ('--backend-args'):
+                backend_args = a
             elif o == '--stdout':
                 syslog = False
             else:
@@ -1123,6 +1156,9 @@ if __name__ == '__main__':
         usage()
         sys.exit(2)
 
+    backend = get_backend_type(backend_type_name)()
+    backend.setup(backend_args)
+
     logger = logging.getLogger('')
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
     if syslog:
@@ -1133,7 +1169,6 @@ if __name__ == '__main__':
         daemonize()
 
     try:
-        backend = vSPCBackendMemory()
         backend.start()
 
         vSPC(proxy_port, admin_port, vm_port_start, vm_expire_time, backend).run()

@@ -38,6 +38,8 @@ This server is based on publicly available documentation:
   http://www.vmware.com/support/developer/vc-sdk/visdk41pubs/vsp41_usingproxy_virtual_serial_ports.pdf
 """
 
+from __future__ import with_statement
+
 __author__ = "Zachary M. Loafman"
 __copyright__ = "Copyright (C) 2011 Isilon Systems LLC."
 __revision__ = "$Id$"
@@ -51,8 +53,10 @@ import select
 import socket
 import struct
 import sys
+import threading
 import time
 import traceback
+import Queue
 from telnetlib import *
 from telnetlib import IAC,DO,DONT,WILL,WONT,BINARY,ECHO,SGA,SB,SE,NOOPT,theNULL
 
@@ -510,13 +514,150 @@ class Selector:
         while True:
             self.run_once()
 
+class vSPCBackendMemory:
+    ADMIN_THREADS = 4
+    ADMIN_CONN_TIMEOUT = 0.2
+
+    class OVm:
+        def __init__(self, uuid = None):
+            self.uuid = uuid
+            self.port = None
+            self.name = None
+
+    def __init__(self):
+        self.admin_queue = Queue.Queue()
+        self.admin_threads = []
+
+        self.observer_queue = Queue.Queue()
+        self.observed_vms_lock = threading.Lock()
+        self.observed_vms = {}
+        self.observed_vms_loaded = False
+
+        self.hook_queue = Queue.Queue()
+
+    def _start_thread(self, f):
+        th = threading.Thread(target = f)
+        th.daemon = True
+        th.start()
+
+        return th
+
+    def start(self):
+        for i in range(0, self.ADMIN_THREADS):
+            self.admin_threads.append(self._start_thread(self.admin_run))
+
+        self.observer_thread = self._start_thread(self.observer_run)
+        self.hook_thread = self._start_thread(self.hook_run)
+
+    def _queue_run(self, queue):
+        while True:
+            try:
+                queue.get()()
+            except Exception, e:
+                logging.exception("Worker exception caught")
+
+    def admin_run(self):
+        self._queue_run(self.admin_queue)
+
+    def observer_run(self):
+        self._queue_run(self.observer_queue)
+
+    def hook_run(self):
+        self._queue_run(self.hook_queue)
+
+    def load_vms(self):
+        return {}
+
+    def get_observed_vms(self):
+        if not self.observed_vms_loaded:
+            vms = self.load_vms()
+            with self.observed_vms_lock:
+                if not self.observed_vms_loaded:
+                    self.observed_vms = vms
+                    self.observed_vms_loaded = True
+
+        with self.observed_vms_lock:
+            vms = self.observed_vms.copy()
+
+        return vms
+
+    def notify_vm(self, uuid, name, port):
+        self.observer_queue.put(lambda: self.vm(uuid, name, port))
+
+    def vm(self, uuid, name, port):
+        with self.observed_vms_lock:
+            vm = self.observed_vms.setdefault(uuid, self.OVm())
+            vm.uuid = uuid
+            vm.name = name
+            vm.port = port
+            data = (vm.uuid, vm.name, vm.port)
+
+        self.hook_queue.put(lambda: self.vm_hook(*data))
+
+    def vm_hook(self, uuid, name, port):
+        logging.debug("vm_hook: uuid: %s, name: %s, port: %s" %
+                      (uuid, name, port))
+
+    def notify_vm_del(self, uuid):
+        self.observer_queue.put(lambda: self.vm_del(uuid))
+
+    def vm_del(self, uuid):
+        with self.observed_vms_lock:
+            if self.observed_vms.has_key(uuid):
+                del self.observed_vms[uuid]
+
+        self.hook_queue.put(lambda: self.vm_del_hook(uuid))
+
+    def vm_del_hook(self, uuid):
+        logging.debug("vm_del_hook: uuid: %s" % uuid)
+
+    def notify_query_socket(self, sock):
+        self.admin_queue.put(lambda: self.handle_query_socket(sock))
+
+    def handle_query_socket(self, sock):
+        sock.settimeout(self.ADMIN_CONN_TIMEOUT)
+        sockfile = sock.makefile()
+
+        # Trade versions
+        pickle.dump(Q_VERS, sockfile)
+        sockfile.flush()
+
+        try:
+            client_vers = int(pickle.load(sockfile))
+        except:
+            try:
+                pickle.dump(Exception("I don't understand"), sockfile)
+                sockfile.flush()
+            except:
+                pass
+            finally:
+                return
+
+        vers = min(Q_VERS, client_vers)
+        logging.debug("version %d query", vers)
+
+        try:
+            if vers == 1:
+                vms = self.get_observed_vms()
+
+                l = []
+                for uuid in vms.keys():
+                    vm = vms[uuid]
+                    l.append({Q_NAME: vm.name, Q_UUID: vm.uuid, Q_PORT: vm.port})
+                pickle.dump((vers, l), sockfile)
+            else:
+                pickle.dump(Exception('No common version'), sockfile)
+            sockfile.flush()
+        except Exception, e:
+            logging.debug('handle_query_socket exception: %s' % str(e))
+
 class vSPC(Selector, VMExtHandler):
     class Vm:
-        def __init__(self):
-            self.vts = []
+        def __init__(self, uuid = None, name = None, vts = None):
+            self.vts = vts if vts else []
             self.clients = []
-            self.uuid = None
-            self.name = None
+            self.uuid = uuid
+            self.name = name
             self.port = None
             self.listener = None
             self.last_time = None
@@ -532,16 +673,16 @@ class vSPC(Selector, VMExtHandler):
             TelnetServer.__init__(self, sock, server_opts, client_opts)
             self.uuid = None
 
-    def __init__(self, proxy_port, admin_port, 
-                 vm_port_start, vm_expire_time):
+    def __init__(self, proxy_port, admin_port,
+                 vm_port_start, vm_expire_time, backend):
         Selector.__init__(self)
 
         self.proxy_port = proxy_port
         self.admin_port = admin_port
         self.vm_port_next = vm_port_start
         self.vm_expire_time = vm_expire_time
+        self.backend = backend
 
-        self.limbo = []
         self.orphans = []
         self.vms = {}
         self.ports = {}
@@ -559,7 +700,6 @@ class vSPC(Selector, VMExtHandler):
         sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
         vt = VMTelnetServer(sock, handler = self)
         self.add_reader(vt, self.new_vm_data)
-        self.limbo.append(vt)
 
     def new_client_connection(self, vm):
         sock = vm.listener.accept()[0]
@@ -582,7 +722,6 @@ class vSPC(Selector, VMExtHandler):
             self.stamp_orphan(self.vms[vt.uuid])
         else:
             logging.debug('unidentified VM socket closed')
-            self.limbo.remove(vt)
         self.del_all(vt)
 
     def new_vm_data(self, vt):
@@ -608,10 +747,9 @@ class vSPC(Selector, VMExtHandler):
         if not s: # May only be option data, or exception
             return
 
-        if vt in self.limbo:
+        if not vt.uuid or not self.vms.has_key(vt.uuid):
             # In limbo, no one can hear you scream
             return
-        assert vt.uuid # Non-limbo VMs have a uuid
 
         # logging.debug('new_vm_data %s: %s' % (vt.uuid, repr(s)))
 
@@ -659,35 +797,51 @@ class vSPC(Selector, VMExtHandler):
             except (EOFError, IOError, socket.error), e:
                 logging.debug('cl.socket send error: %s' % (str(e)))
 
-    def handle_vc_uuid(self, vt):
-        assert vt in self.limbo
+    def new_vm(self, uuid, name, port = None, vts = None):
+        vm = self.Vm(uuid = uuid, name = name, vts = vts)
 
-        self.limbo.remove(vt)
-        if self.vms.has_key(vt.uuid):
-            # This could be a reconnect, or it could be a vmotion
-            # peer. Regardless, it's easy enough just to allow this
-            # new vt to send to all clients, and all clients to
-            # receive.
-            vm = self.vms[vt.uuid]
-            vm.vts.append(vt)
+        self.open_vm_port(vm, port)
+        self.vms[uuid] = vm
 
-            logging.debug('uuid %s VM reconnect, %d active' %
-                          (vm.uuid, len(vm.vts)))
+        # Only notify if we generated the port
+        if not port:
+            self.backend.notify_vm(vm.uuid, vm.name, vm.port)
+
+        logging.debug('%s:%s listening on port %d' % 
+                      (vm.uuid, repr(vm.name), vm.port))
+
+        return vm
+
+    def _add_vm_when_ready(self, vt):
+        if not vt.name or not vt.uuid:
             return
 
-        # New VM identified. Establish a new listener.
-        vm = self.Vm()
-        vm.uuid = vt.uuid
-        self.new_vm_port(vm)
-        vm.listener = openport(vm.port)
-        self.add_reader(vm, self.new_client_connection)
-        self.vms[vt.uuid] = vm
+        self.new_vm(vt.uuid, vt.name, vts = [vt])
+
+    def handle_vc_uuid(self, vt):
+        if not self.vms.has_key(vt.uuid):
+            self._add_vm_when_ready(vt)
+            return
+
+        # This could be a reconnect, or it could be a vmotion
+        # peer. Regardless, it's easy enough just to allow this
+        # new vt to send to all clients, and all clients to
+        # receive.
+        vm = self.vms[vt.uuid]
         vm.vts.append(vt)
 
-        logging.debug('uuid %s listening on port %d' % (vm.uuid, vm.port))
+        logging.debug('uuid %s VM reconnect, %d active' %
+                      (vm.uuid, len(vm.vts)))
 
     def handle_vm_name(self, vt):
-        self.vms[vt.uuid].name = vt.name
+        if not self.vms.has_key(vt.uuid):
+            self._add_vm_when_ready(vt)
+            return
+
+        vm = self.vms[vt.uuid]
+        if vt.name != vm.name:
+            vm.name = vt.name
+            self.backend.notify_vm(vm.uuid, vm.name, vm.port)
 
     def handle_vmotion_begin(self, vt, data):
         if not vt.uuid:
@@ -708,7 +862,8 @@ class vSPC(Selector, VMExtHandler):
             logging.debug('peer cookie %s doesn\'t exist' % hexdump(data))
             return False
 
-        logging.debug('peer cookie %s maps to uuid %s' % (vt.uuid, hexdump(data)))
+        logging.debug('peer cookie %s maps to uuid %s' %
+                      (hexdump(data), self.vmotions[data]))
 
         peer_uuid = self.vmotions[data]
         if vt.uuid:
@@ -747,49 +902,8 @@ class vSPC(Selector, VMExtHandler):
 
     def new_admin_connection(self, listener):
         sock = listener.accept()[0]
-        sock.setblocking(0)
-        sockfile = sock.makefile()
-
-        # Trade versions
-        pickle.dump(Q_VERS, sockfile)
-        sockfile.flush()
-
-        self.add_reader(sockfile, self.finish_query)
-
-    def finish_query(self, sockfile):
-        # Technically the way we handle this is wrong. For perfectly valid reasons,
-        # pickle.load may fail due to a partial read on the socket. Don't defend
-        # against that yet, out of sheer laziness. -ZML
-        self.del_reader(sockfile)
-
-        try:
-            client_vers = int(pickle.load(sockfile))
-        except:
-            try:
-                pickle.dump(Exception("I don't understand"), sockfile)
-                sockfile.flush()
-            except:
-                pass
-            finally:
-                return
-
-        vers = min(Q_VERS, client_vers)
-        logging.debug("version %d query", vers)
-
         self.collect_orphans()
-
-        try:
-            if vers == 1:
-                l = []
-                for uuid in self.vms.keys():
-                    vm = self.vms[uuid]
-                    l.append({Q_NAME: vm.name, Q_UUID: vm.uuid, Q_PORT: vm.port})
-                pickle.dump((vers, l), sockfile)
-            else:
-                pickle.dump(Exception('No common version'), sockfile)
-            sockfile.flush()
-        except Exception, e:
-            logging.debug('finish_query exception: %s' % str(e))
+        backend.notify_query_socket(sock)
 
     def collect_orphans(self):
         t = time.time()
@@ -809,6 +923,8 @@ class vSPC(Selector, VMExtHandler):
 
             logging.debug('expired VM with uuid %s, port %d' 
                           % (uuid, vm.port))
+            self.backend.notify_vm_del(vm.uuid)
+
             self.del_all(vm)
             del vm.listener
             self.vm_port_next = min(vm.port, self.vm_port_next)
@@ -819,21 +935,34 @@ class vSPC(Selector, VMExtHandler):
                 vm.vmotion = None
             del vm
 
-    def new_vm_port(self, vm):
+    def open_vm_port(self, vm, port):
         self.collect_orphans()
 
-        p = self.vm_port_next
-        while self.ports.has_key(p):
-            p += 1
+        if port:
+            vm.port = port
+        else:
+            p = self.vm_port_next
+            while self.ports.has_key(p):
+                p += 1
 
-        vm.port = p
+            self.vm_port_next = p + 1
+            vm.port = p
+
+        assert not self.ports.has_key(vm.port)
         self.ports[vm.port] = vm.uuid
-        self.vm_port_next = vm.port + 1
 
-    def serve(self):
+        vm.listener = openport(vm.port)
+        self.add_reader(vm, self.new_client_connection)
+
+    def create_old_vms(self, vms):
+        assert not vms # No persistence yet
+
+    def run(self):
         logging.info('Starting vSPC on proxy port %d, admin port %d, '
                      'allocating ports starting at %d' % 
                      (self.proxy_port, self.admin_port, self.vm_port_next))
+
+        self.create_old_vms(self.backend.get_observed_vms())
 
         self.add_reader(openport(self.proxy_port), self.new_vm_connection)
         self.add_reader(openport(self.admin_port), self.new_admin_connection)
@@ -1004,6 +1133,13 @@ if __name__ == '__main__':
         daemonize()
 
     try:
-        vSPC(proxy_port, admin_port, vm_port_start, vm_expire_time).serve()
+        backend = vSPCBackendMemory()
+        backend.start()
+
+        vSPC(proxy_port, admin_port, vm_port_start, vm_expire_time, backend).run()
+    except KeyboardInterrupt:
+        logging.info("Shutdown requested on keyboard, exiting")
+        sys.exit(0)
     except Exception, e:
         logging.exception("Top level exception caught")
+        sys.exit(1)

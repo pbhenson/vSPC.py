@@ -1112,6 +1112,8 @@ Query (without --server): Connect to the --admin-port (default %s) on
 Server (with --server):
   Additional options:
     [-p|--proxy-port P] [-r|--port-range-start P] [--vm-expire-time seconds]
+    [--backend Backend] [--backend-args 'arg string'] [--backend-help]
+    [-f|--persist-file file]
     [--stdout] [--no-fork]
 
   Start Virtual Serial Port Concentrator. By default, vSPC listens on
@@ -1120,8 +1122,8 @@ Server (with --server):
   queried using %s without the --server option (e.g. '%s localhost').
   A standard 'telnet' may then be used to connect to the VM serial port.
 
-  In order to configure a VM to use the vSPC, you must be running ESXi 4.1+. Add the serial port
-  to the VM, then select:
+  In order to configure a VM to use the vSPC, you must be running ESXi 4.1+.
+  Add the serial port to the VM, then select:
     (*) Use Network
       (*) Server
       Port URI: %s
@@ -1138,17 +1140,45 @@ Server (with --server):
   longer met, the mapping is retained for --vm-expire-time seconds
   (default %s).
 
+  The backend of %s serves three major purposes: (a) On initial load,
+  all port mappings are retrieved from the backend. The main thread
+  maintains the port mappings after initial load, but the backend is
+  responsible for setting the initial map. (This design was chosen to
+  avoid blocking on the backend when a new VM connects.) (b) The
+  backend serves all admin connections (because it has full knowledge
+  of the mappings), (c) The backend can fire off customizable hooks as
+  VMs come and go, allowing for persistence, or database tracking, or
+  whatever.
+
+  By default, %s uses the "Memory" backend, which really just
+  means that no initial mappings are loaded on startup and all state
+  is retained in memory alone. The other builtin backend is the "File"
+  backend, which can be configured like so:
+    --backend File --backend-args '-f /tmp/vSPC'.
+  As a convenience, this same configuration can be accomplished using
+  the top level parameter -f or --persist-file, i.e. '-f /tmp/vSPC' is
+  synonymous with the previous set of arguments.
+
+  If '--backend Foo' is given but no builtin backend Foo exists, %s
+  tries to import module vSPCBackendFoo, looking for class vSPCBackendFoo.
+  See --backend-help for programming details.
+
   Explanation of server options:
     -a|--admin-port: The port to listen/use for queries (default %s)
     -p|--proxy-port: The proxy port to listen on (default %s)
     -r|--port-range-start: What port to start port allocations from (default %s)
+    --vm-expire-time: How long to wait before expiring a mapping with no connections
+    -f|--persist-file: DBM file prefix to persist mappings to (.dat/.dir may follow)
+    --backend: Name of custom backend class (see above)
+    --backend-args: Arguments to custom backend
     --stdout: Log to stdout instead of syslog
     --no-fork: Don't daemonize
     -d|--debug: Debug mode (turns up logging and implies --stdout --no-fork)
 ''' % (BASENAME, __revision__, BASENAME, ADMIN_PORT, PROXY_PORT,
        VM_PORT_START, BASENAME, BASENAME, BASENAME,
-       socket.gethostname(), PROXY_PORT, BASENAME, BASENAME,
-       VM_EXPIRE_TIME, ADMIN_PORT, PROXY_PORT, VM_PORT_START))
+       socket.gethostname(), PROXY_PORT,
+       BASENAME, BASENAME, VM_EXPIRE_TIME, BASENAME, BASENAME, BASENAME,
+       ADMIN_PORT, PROXY_PORT, VM_PORT_START))
 
 if __name__ == '__main__':
     import getopt
@@ -1171,6 +1201,7 @@ if __name__ == '__main__':
                                         'server', 'stdout', 'no-fork',
                                         'vm-expire-time=',
                                         'backend=', 'backend-args=',
+                                        'backend-help',
                                         'persist-file='])
         for o,a in opts:
             if o in ['-h', '--help']:
@@ -1198,6 +1229,9 @@ if __name__ == '__main__':
                 backend_type_name = a
             elif o in ['--backend-args']:
                 backend_args = a
+            elif o in ['--backend-help']:
+                help(vSPCBackendMemory)
+                sys.exit(0)
             elif o in ['-f', '--persist-file']:
                 import pipes
                 backend_type_name = 'File'

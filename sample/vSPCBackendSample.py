@@ -33,7 +33,9 @@ vSPCBackendSample.py - Sample backend for vSPC.py
 Example file to show a sample backend implementation, inheriting from
 vSPCBackendMemory. This demonstrates how to modify the hooks in your
 own backend implementation. Hooks can block arbitrarily, as they run
-on a separate worker thread, in order of VM modification.
+on a separate worker thread, in order of VM modification. If you want
+to see another reasonable example, look at the code for
+vSPCBackendFile, which also overrides vSPCBackendMemory.
 
 Run with something like:
   PYTHONPATH=/path/to/sample vSPC.py -s --backend Sample

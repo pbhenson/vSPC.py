@@ -81,6 +81,11 @@ Q_NAME = 'name'
 Q_UUID = 'uuid'
 Q_PORT = 'port'
 
+# Persistence fields
+P_UUID = 'uuid'
+P_NAME = 'name'
+P_PORT = 'port'
+
 # How long to wait for an option response. Any option response resets
 # the counter. This is mainly to deal with "raw" connections (like
 # gdb) that don't negotiate telnet options at all.
@@ -519,10 +524,10 @@ class vSPCBackendMemory:
     ADMIN_CONN_TIMEOUT = 0.2
 
     class OVm:
-        def __init__(self, uuid = None):
+        def __init__(self, uuid = None, port = None, name = None):
             self.uuid = uuid
-            self.port = None
-            self.name = None
+            self.port = port
+            self.name = name
 
     def __init__(self):
         self.admin_queue = Queue.Queue()
@@ -584,7 +589,7 @@ class vSPCBackendMemory:
         with self.observed_vms_lock:
             vms = self.observed_vms.copy()
 
-        return vms
+        return vms.values()
 
     def notify_vm(self, uuid, name, port):
         self.observer_queue.put(lambda: self.vm(uuid, name, port))
@@ -646,8 +651,7 @@ class vSPCBackendMemory:
                 vms = self.get_observed_vms()
 
                 l = []
-                for uuid in vms.keys():
-                    vm = vms[uuid]
+                for vm in vms:
                     l.append({Q_NAME: vm.name, Q_UUID: vm.uuid, Q_PORT: vm.port})
                 pickle.dump((vers, l), sockfile)
             else:
@@ -655,6 +659,61 @@ class vSPCBackendMemory:
             sockfile.flush()
         except Exception, e:
             logging.debug('handle_query_socket exception: %s' % str(e))
+
+class vSPCBackendFile(vSPCBackendMemory):
+    def __init__(self):
+        vSPCBackendMemory.__init__(self)
+
+        self.shelf = None
+
+    def usage(self):
+        sys.stderr.write('''\
+%s options: [-h|--help] -f|--file filename
+
+  -h|--help: This message
+  -f|--file: Where to persist VMs (required argument)
+''' % str(self.__class__))
+
+    def setup(self, args):
+        import shlex
+        import shelve
+
+        fname = None
+
+        try:
+            opts, args = getopt.gnu_getopt(shlex.split(args), 'hf:', ['--help', '--file='])
+            for o, a in opts:
+                if o in ['-h', '--help']:
+                    self.usage()
+                    sys.exit(0)
+                elif o in ['-f', '--file']:
+                    fname = a
+                else:
+                    assert False, 'unhandled option'
+        except getopt.GetoptError, err:
+            print str(err)
+            self.usage()
+            sys.exit(2)
+
+        if not fname:
+            self.usage()
+            sys.exit(2)
+
+        self.shelf = shelve.open(fname)
+
+    def vm_hook(self, uuid, name, port):
+        self.shelf[uuid] = { P_UUID : uuid, P_NAME : name, P_PORT : port }
+
+    def vm_del_hook(self, uuid):
+        del self.shelf[uuid]
+
+    def load_vms(self):
+        vms = {}
+        for v in self.shelf.values():
+            vms[v[P_UUID]] = \
+                self.OVm(uuid = v[P_UUID], name = v[P_NAME], port = v[P_PORT])
+
+        return vms
 
 class vSPC(Selector, VMExtHandler):
     class Vm:
@@ -815,6 +874,9 @@ class vSPC(Selector, VMExtHandler):
         logging.debug('%s:%s listening on port %d' % 
                       (vm.uuid, repr(vm.name), vm.port))
 
+        # The clock is always ticking
+        self.stamp_orphan(vm)
+
         return vm
 
     def _add_vm_when_ready(self, vt):
@@ -960,7 +1022,8 @@ class vSPC(Selector, VMExtHandler):
         self.add_reader(vm, self.new_client_connection)
 
     def create_old_vms(self, vms):
-        assert not vms # No persistence yet
+        for vm in vms:
+            self.new_vm(uuid = vm.uuid, name = vm.name, port = vm.port)
 
     def run(self):
         logging.info('Starting vSPC on proxy port %d, admin port %d, '
@@ -1102,12 +1165,13 @@ if __name__ == '__main__':
     backend_args = ''
 
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], 'a:hdp:r:s',
+        opts, args = getopt.gnu_getopt(sys.argv[1:], 'a:f:hdp:r:s',
                                        ['help', 'debug', 'admin-port=',
                                         'proxy-port=', 'port-range-start=',
                                         'server', 'stdout', 'no-fork',
                                         'vm-expire-time=',
-                                        'backend=', 'backend-args='])
+                                        'backend=', 'backend-args=',
+                                        'persist-file='])
         for o,a in opts:
             if o in ['-h', '--help']:
                 usage()
@@ -1116,24 +1180,28 @@ if __name__ == '__main__':
                 debug = True
                 syslog = False
                 fork = False
-            elif o in ('-a', '--admin-port'):
+            elif o in ['-a', '--admin-port']:
                 admin_port = int(a)
-            elif o in ('-p', '--proxy-port'):
+            elif o in ['-p', '--proxy-port']:
                 proxy_port = int(a)
-            elif o in ('-r', '--port-range-start'):
+            elif o in ['-r', '--port-range-start']:
                 vm_port_start = int(a)
-            elif o in ('-s', '--server'):
+            elif o in ['-s', '--server']:
                 server_mode = True
-            elif o in ('--vm-expire-time'):
+            elif o in ['--vm-expire-time']:
                 vm_expire_time = int(a)
-            elif o in ('--no-fork'):
-                fork = False
-            elif o in ('--backend'):
-                backend_type_name = a
-            elif o in ('--backend-args'):
-                backend_args = a
-            elif o == '--stdout':
+            elif o in ['--stdout']:
                 syslog = False
+            elif o in ['--no-fork']:
+                fork = False
+            elif o in ['--backend']:
+                backend_type_name = a
+            elif o in ['--backend-args']:
+                backend_args = a
+            elif o in ['-f', '--persist-file']:
+                import pipes
+                backend_type_name = 'File'
+                backend_args = '-f %s' % pipes.quote(a)
             else:
                 assert False, 'unhandled option'
     except getopt.GetoptError, err:

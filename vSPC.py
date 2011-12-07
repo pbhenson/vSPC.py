@@ -1132,7 +1132,7 @@ Server (with --server):
   Additional options:
     [-p|--proxy-port P] [-r|--port-range-start P] [--vm-expire-time seconds]
     [--backend Backend] [--backend-args 'arg string'] [--backend-help]
-    [-f|--persist-file file]
+    [-f|--persist-file file] [--pidfile file]
     [--stdout] [--no-fork]
 
   Start Virtual Serial Port Concentrator. By default, vSPC listens on
@@ -1149,6 +1149,17 @@ Server (with --server):
       [X] Use Virtual Serial Port Concentrator:
       vSPC: telnet://%s:%s
   NOTE: Direction MUST be Server, and Port URI MUST be %s
+
+  Virtual serial ports support TLS/SSL on connections to a concentrator.
+  To use TLS/SSL, configure the serial port as above, except for the
+  vSPC URI field, which should say:
+      vSPC URI: telnets://%s:%s
+  then launch vSPC.py with the --ssl, --cert, and --key (if necessary)
+  options.
+
+  To have the process id of the server written to a file, use the
+  --pidfile argument. This is useful for initscripts and other process
+  management tools.
 
   %s makes a best effort to keep VM to port number mappings stable,
   based on the UUID of the connecting VM. Even if a VM disconnects,
@@ -1191,12 +1202,16 @@ Server (with --server):
     --backend: Name of custom backend class (see above)
     --backend-args: Arguments to custom backend
     --stdout: Log to stdout instead of syslog
+    --ssl: Start SSL/TLS on connections to the proxy port
+    --cert: The certificate or PEM file to use on the proxy port. Only meaningful with --ssl
+    --key: The key, if necessary, to the certificate given by --cert. Only meaningful with --ssl
     --no-fork: Don't daemonize
+    --pidfile: The file to write the process ID of the server to (no file by default)
     -d|--debug: Debug mode (turns up logging and implies --stdout --no-fork)
 ''' % (BASENAME, __revision__, BASENAME, ADMIN_PORT, PROXY_PORT,
        VM_PORT_START, BASENAME, BASENAME, BASENAME,
-       socket.gethostname(), PROXY_PORT,
-       BASENAME, BASENAME, VM_EXPIRE_TIME, BASENAME, BASENAME, BASENAME,
+       socket.gethostname(), PROXY_PORT, BASENAME, socket.gethostname(), PROXY_PORT,
+       BASENAME, VM_EXPIRE_TIME, BASENAME, BASENAME, BASENAME,
        ADMIN_PORT, PROXY_PORT, VM_PORT_START))
 
 if __name__ == '__main__':
@@ -1212,17 +1227,20 @@ if __name__ == '__main__':
     server_mode = False
     backend_type_name = 'Memory'
     backend_args = ''
+    use_ssl = False
+    ssl_cert = None
+    ssl_key = None
     pidfile = None
 
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], 'a:f:hdp:r:s',
                                        ['help', 'debug', 'admin-port=',
                                         'proxy-port=', 'port-range-start=',
-                                        'server', 'stdout', 'no-fork',
-                                        'vm-expire-time=',
+                                        'server', 'stdout', 'no-fork', 'ssl',
+                                        'vm-expire-time=', "cert=", "key=",
                                         'backend=', 'backend-args=',
                                         'backend-help',
-                                        'persist-file='])
+                                        'persist-file=', 'pidfile='])
         for o,a in opts:
             if o in ['-h', '--help']:
                 usage()
@@ -1256,6 +1274,14 @@ if __name__ == '__main__':
                 import pipes
                 backend_type_name = 'File'
                 backend_args = '-f %s' % pipes.quote(a)
+            elif o in ['--ssl']:
+                use_ssl = True
+            elif o in ['--cert']:
+                ssl_cert = a
+            elif o in ['--key']:
+                ssl_key = a
+            elif o in ['--pidfile']:
+                pidfile = a
             else:
                 assert False, 'unhandled option'
     except getopt.GetoptError, err:
@@ -1275,6 +1301,11 @@ if __name__ == '__main__':
 
     if len(args) > 0:
         print "Unexpected arguments: %s" % args
+        usage()
+        sys.exit(2)
+
+    if use_ssl and not ssl_cert:
+        print "Must specify certificate in order to use SSL"
         usage()
         sys.exit(2)
 

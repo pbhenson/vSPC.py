@@ -1285,7 +1285,11 @@ if __name__ == '__main__':
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
     if syslog:
         from logging.handlers import SysLogHandler
-        logger.addHandler(SysLogHandler(address='/dev/log'))
+        from logging import Formatter
+        formatter = Formatter(fmt="vSPC.py[%(process)d]: %(message)s")
+        handler = SysLogHandler(address="/dev/log")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
     if fork:
         daemonize()

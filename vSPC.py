@@ -1332,7 +1332,7 @@ if __name__ == '__main__':
     try:
         backend.start()
 
-        vSPC(proxy_port, admin_port, vm_port_start, vm_expire_time, backend).run()
+        vSPC(proxy_port, admin_port, vm_port_start, vm_expire_time, backend, use_ssl, ssl_cert, ssl_key).run()
     except KeyboardInterrupt:
         logging.info("Shutdown requested on keyboard, exiting")
         sys.exit(0)

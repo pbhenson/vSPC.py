@@ -611,6 +611,13 @@ class vSPCBackendMemory:
         logging.debug("vm_hook: uuid: %s, name: %s, port: %s" %
                       (uuid, name, port))
 
+    def notify_vm_msg(self, uuid, name, s):
+        self.hook_queue.put(lambda: self.vm_msg_hook(uuid, name, s))
+
+    def vm_msg_hook(self, uuid, name, s):
+        logging.debug("vm_msg_hook: uuid: %s, name: %s, msg: %s" %
+                      (uuid, name, s))
+
     def notify_vm_del(self, uuid):
         self.observer_queue.put(lambda: self.vm_del(uuid))
 
@@ -823,6 +830,7 @@ class vSPC(Selector, VMExtHandler):
             return
 
         # logging.debug('new_vm_data %s: %s' % (vt.uuid, repr(s)))
+        self.backend.notify_vm_msg(vt.uuid, vt.name, s)
 
         for cl in self.vms[vt.uuid].clients:
             try:

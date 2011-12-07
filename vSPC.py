@@ -1212,6 +1212,7 @@ if __name__ == '__main__':
     server_mode = False
     backend_type_name = 'Memory'
     backend_args = ''
+    pidfile = None
 
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], 'a:f:hdp:r:s',
@@ -1288,6 +1289,10 @@ if __name__ == '__main__':
 
     if fork:
         daemonize()
+        if pidfile is not None:
+            f = open(pidfile, "w")
+            f.write("%d" % os.getpid())
+            f.close()
 
     try:
         backend.start()

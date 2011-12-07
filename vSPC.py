@@ -51,6 +51,7 @@ import os
 import pickle
 import select
 import socket
+import ssl
 import struct
 import sys
 import threading
@@ -472,8 +473,10 @@ class VMTelnetServer(TelnetServer):
                               % (ord(subcmd), hexdump(data)))
             self._send_vmware(UNKNOWN_SUBOPTION_RCVD_2 + subcmd)
 
-def openport(port):
+def openport(port, use_ssl=False, ssl_cert=None, ssl_key=None):
 	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	if use_ssl:
+		sock = ssl.wrap_socket(sock, keyfile=ssl_key, certfile=ssl_cert)
 	sock.setblocking(0)
 	sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1);
         sock.bind(("", port))
@@ -738,7 +741,8 @@ class vSPC(Selector, VMExtHandler):
             self.uuid = None
 
     def __init__(self, proxy_port, admin_port,
-                 vm_port_start, vm_expire_time, backend):
+                 vm_port_start, vm_expire_time, backend, use_ssl=False,
+                 ssl_cert=None, ssl_key=None):
         Selector.__init__(self)
 
         self.proxy_port = proxy_port
@@ -751,6 +755,9 @@ class vSPC(Selector, VMExtHandler):
         self.vms = {}
         self.ports = {}
         self.vmotions = {}
+        self.do_ssl = use_ssl
+        self.ssl_cert = ssl_cert
+        self.ssl_key = ssl_key
 
     def send_buffered(self, ts, s = ''):
         if ts.send_buffered(s):

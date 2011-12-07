@@ -511,8 +511,12 @@ class Selector:
         self.del_writer(stream)
 
     def run_once(self, timeout = None):
-        (readers, writers, exceptions) = \
-            select.select(self.read_handlers.keys(), [], [], timeout)
+        try:
+            (readers, writers, exceptions) = \
+                select.select(self.read_handlers.keys(), [], [], timeout)
+        except select.error, e:
+            # interrupted syscall
+            return False
         for reader in readers:
             self.read_handlers[reader](reader)
         for writer in writers:

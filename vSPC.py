@@ -1051,7 +1051,7 @@ class vSPC(Selector, VMExtHandler):
 
         self.create_old_vms(self.backend.get_observed_vms())
 
-        self.add_reader(openport(self.proxy_port), self.new_vm_connection)
+        self.add_reader(openport(self.proxy_port, self.do_ssl, self.ssl_cert, self.ssl_key), self.new_vm_connection)
         self.add_reader(openport(self.admin_port), self.new_admin_connection)
         self.run_forever()
 

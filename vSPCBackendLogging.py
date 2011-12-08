@@ -91,5 +91,5 @@ class vSPCBackendLogging(vSPCBackendMemory):
     def handle_sighup(self, signum, frame):
         assert signum == signal.SIGHUP
 
-        logging.info('vspc received reload request, reopening log files')
+        logging.info('vSPC received reload request, reopening log files')
         self.reload()

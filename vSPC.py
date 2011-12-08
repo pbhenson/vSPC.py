@@ -474,14 +474,14 @@ class VMTelnetServer(TelnetServer):
             self._send_vmware(UNKNOWN_SUBOPTION_RCVD_2 + subcmd)
 
 def openport(port, use_ssl=False, ssl_cert=None, ssl_key=None):
-	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	if use_ssl:
-		sock = ssl.wrap_socket(sock, keyfile=ssl_key, certfile=ssl_cert)
-	sock.setblocking(0)
-	sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1);
-        sock.bind(("", port))
-	sock.listen(LISTEN_BACKLOG)
-	return sock
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if use_ssl:
+        sock = ssl.wrap_socket(sock, keyfile=ssl_key, certfile=ssl_cert)
+    sock.setblocking(0)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1);
+    sock.bind(("", port))
+    sock.listen(LISTEN_BACKLOG)
+    return sock
 
 class Selector:
     def __init__(self):

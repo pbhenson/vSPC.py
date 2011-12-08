@@ -74,7 +74,7 @@ VM_PORT_START = 50000
 
 # Default for --expire, number of seconds a VM (based on uuid) holds a
 # port number / listener open with no VMware or client connections
-VM_EXPIRE_TIME = 24*3600 
+VM_EXPIRE_TIME = 24*3600
 
 # Query protocol
 Q_VERS = 1
@@ -321,7 +321,7 @@ class TelnetServer(FixedTelnet):
         self.process_rawq()
         while not self.eof and self.sock_avail():
             self.fill_rawq()
-            self.process_rawq()  
+            self.process_rawq()
 
     def negotiation_done(self):
         self.process_available()
@@ -890,7 +890,7 @@ class vSPC(Selector, VMExtHandler):
         if not port:
             self.backend.notify_vm(vm.uuid, vm.name, vm.port)
 
-        logging.debug('%s:%s listening on port %d' % 
+        logging.debug('%s:%s listening on port %d' %
                       (vm.uuid, repr(vm.name), vm.port))
 
         # The clock is always ticking
@@ -1007,7 +1007,7 @@ class vSPC(Selector, VMExtHandler):
             elif vm.last_time + self.vm_expire_time > t:
                 continue
 
-            logging.debug('expired VM with uuid %s, port %d' 
+            logging.debug('expired VM with uuid %s, port %d'
                           % (uuid, vm.port))
             self.backend.notify_vm_del(vm.uuid)
 
@@ -1046,7 +1046,7 @@ class vSPC(Selector, VMExtHandler):
 
     def run(self):
         logging.info('Starting vSPC on proxy port %d, admin port %d, '
-                     'allocating ports starting at %d' % 
+                     'allocating ports starting at %d' %
                      (self.proxy_port, self.admin_port, self.vm_port_next))
 
         self.create_old_vms(self.backend.get_observed_vms())
@@ -1289,7 +1289,7 @@ if __name__ == '__main__':
         usage()
         sys.exit(2)
 
-    if not server_mode:        
+    if not server_mode:
         if len(args) != 1:
             print "Expected 1 argument, found %d" % len(args)
             usage()

@@ -55,6 +55,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
         f = self.file_for_vm(name, uuid)
         try:
             f.write(msg)
+            f.flush()
         except ValueError, e:
             # we tried to write to a closed fd, which means that we were
             # told to reload our log files between when we got the file

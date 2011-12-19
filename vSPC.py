@@ -662,17 +662,20 @@ class vSPCBackendMemory:
 
         try:
             if vers == 1:
-                vms = self.get_observed_vms()
-
-                l = []
-                for vm in vms:
-                    l.append({Q_NAME: vm.name, Q_UUID: vm.uuid, Q_PORT: vm.port})
-                pickle.dump((vers, l), sockfile)
+                pickle.dump((vers, self.format_vm_listing()), sockfile)
             else:
                 pickle.dump(Exception('No common version'), sockfile)
             sockfile.flush()
         except Exception, e:
             logging.debug('handle_query_socket exception: %s' % str(e))
+
+    def format_vm_listing(self):
+        vms = self.get_observed_vms()
+
+        l = []
+        for vm in vms:
+            l.append({Q_NAME: vm.name, Q_UUID: vm.uuid, Q_PORT: vm.port})
+        return l
 
 class vSPCBackendFile(vSPCBackendMemory):
     def __init__(self):

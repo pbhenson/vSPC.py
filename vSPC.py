@@ -635,10 +635,10 @@ class vSPCBackendMemory:
     def vm_del_hook(self, uuid):
         logging.debug("vm_del_hook: uuid: %s" % uuid)
 
-    def notify_query_socket(self, sock):
-        self.admin_queue.put(lambda: self.handle_query_socket(sock))
+    def notify_query_socket(self, sock, vspc):
+        self.admin_queue.put(lambda: self.handle_query_socket(sock, vspc))
 
-    def handle_query_socket(self, sock):
+    def handle_query_socket(self, sock, vspc):
         sock.settimeout(self.ADMIN_CONN_TIMEOUT)
         sockfile = sock.makefile()
 
@@ -989,7 +989,7 @@ class vSPC(Selector, VMExtHandler):
     def new_admin_connection(self, listener):
         sock = listener.accept()[0]
         self.collect_orphans()
-        backend.notify_query_socket(sock)
+        backend.notify_query_socket(sock, self)
 
     def collect_orphans(self):
         t = time.time()

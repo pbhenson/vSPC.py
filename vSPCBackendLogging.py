@@ -45,8 +45,11 @@ class vSPCBackendLogging(vSPCBackendMemory):
 
         self.logdir = parsed_args.logdir
         self.prefix = parsed_args.prefix
-        # filename => filehandle
+        # uuid => filehandle
         self.logfiles = {}
+
+        # uuid => name
+        self.vm_names = {}
 
         # register for SIGHUP, so we know when to reload logfiles.
         signal.signal(signal.SIGHUP, self.handle_sighup)
@@ -82,12 +85,13 @@ class vSPCBackendLogging(vSPCBackendMemory):
         if uuid not in self.logfiles:
             filename = "%s/%s-%s" % (self.logdir, self.prefix, name)
             self.logfiles[uuid] = open(filename, "a")
+            self.vm_names[uuid] = name
         return self.logfiles[uuid]
 
     def reload(self):
         for k, f in self.logfiles.iteritems():
             f.close()
-            self.logfiles[k] = open(k, "a")
+            self.logfiles[k] = self.file_for_vm(self.vm_names[uuid], uuid)
 
     def handle_sighup(self, signum, frame):
         assert signum == signal.SIGHUP

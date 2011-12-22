@@ -54,11 +54,23 @@ class vSPCBackendLogging(vSPCBackendMemory):
         # register for SIGHUP, so we know when to reload logfiles.
         signal.signal(signal.SIGHUP, self.handle_sighup)
 
+        # uuid => list of scrollback entries.
+        self.scrollback = {}
+
+    def add_scrollback(self, uuid, msg):
+        self.scrollback.setdefault(uuid, []).append(msg)
+
+    def get_seed_data(self, uuid):
+        if uuid in self.scrollback:
+            return self.scrollback[uuid]
+        return []
+
     def vm_msg_hook(self, uuid, name, msg):
         f = self.file_for_vm(name, uuid)
         try:
             f.write(msg)
             f.flush()
+            self.add_scrollback(uuid, msg)
         except ValueError, e:
             # we tried to write to a closed fd, which means that we were
             # told to reload our log files between when we got the file

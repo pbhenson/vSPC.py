@@ -593,6 +593,13 @@ class vSPCBackendMemory:
     def load_vms(self):
         return {}
 
+    def get_seed_data(self, uuid):
+        """
+        Return a list of things to give a newly connected client to seed
+        their session with.
+        """
+        return []
+
     def get_observed_vms(self):
         if not self.observed_vms_loaded:
             vms = self.load_vms()

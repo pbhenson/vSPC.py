@@ -971,8 +971,9 @@ class vSPC(Selector, VMExtHandler):
         if not port:
             self.backend.notify_vm(vm.uuid, vm.name, vm.port)
 
-        logging.debug('%s:%s listening on port %d' %
-                      (vm.uuid, repr(vm.name), vm.port))
+        logging.debug('%s:%s connected' % (vm.uuid, repr(vm.name)))
+        if vm.port is not None:
+            logging.debug("listening on port %d" % vm.port)
 
         # The clock is always ticking
         self.stamp_orphan(vm)
@@ -1106,14 +1107,16 @@ class vSPC(Selector, VMExtHandler):
             elif vm.last_time + self.vm_expire_time > t:
                 continue
 
-            logging.debug('expired VM with uuid %s, port %d'
-                          % (uuid, vm.port))
+            logging.debug('expired VM with uuid %s' % uuid)
+            if vm.port is not None:
+                logging.debug(", port %d" % vm.port)
             self.backend.notify_vm_del(vm.uuid)
 
             self.del_all(vm)
             del vm.listener
-            self.vm_port_next = min(vm.port, self.vm_port_next)
-            del self.ports[vm.port]
+            if self.vm_port_next is not None:
+                self.vm_port_next = min(vm.port, self.vm_port_next)
+                del self.ports[vm.port]
             del self.vms[uuid]
             if vm.vmotion:
                 del self.vmotions[vm.vmotion]
@@ -1122,6 +1125,9 @@ class vSPC(Selector, VMExtHandler):
 
     def open_vm_port(self, vm, port):
         self.collect_orphans()
+
+        if self.vm_port_next is None:
+            return
 
         if port:
             vm.port = port
@@ -1144,9 +1150,10 @@ class vSPC(Selector, VMExtHandler):
             self.new_vm(uuid = vm.uuid, name = vm.name, port = vm.port)
 
     def run(self):
-        logging.info('Starting vSPC on proxy port %d, admin port %d, '
-                     'allocating ports starting at %d' %
-                     (self.proxy_port, self.admin_port, self.vm_port_next))
+        logging.info('Starting vSPC on proxy port %d, admin port %d' %
+                     (self.proxy_port, self.admin_port))
+        if self.vm_port_next is not None:
+            logging.info("Allocating VM ports starting at %d" % self.vm_port_next)
 
         self.create_old_vms(self.backend.get_observed_vms())
 

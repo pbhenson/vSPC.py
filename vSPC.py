@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python -u
 
 # Copyright 2011 Isilon Systems LLC. All rights reserved.
 #
@@ -46,6 +46,7 @@ __revision__ = "$Id$"
 
 BASENAME='vSPC.py'
 
+import fcntl
 import logging
 import os
 import pickle
@@ -54,6 +55,7 @@ import socket
 import ssl
 import struct
 import sys
+import termios
 import threading
 import time
 import traceback
@@ -77,7 +79,7 @@ VM_PORT_START = 50000
 VM_EXPIRE_TIME = 24*3600
 
 # Query protocol
-Q_VERS        = 1
+Q_VERS        = 2
 Q_NAME        = 'name'
 Q_UUID        = 'uuid'
 Q_PORT        = 'port'
@@ -95,6 +97,8 @@ P_PORT = 'port'
 UNACK_TIMEOUT=0.5
 
 LISTEN_BACKLOG = 5
+
+CLIENT_ESCAPE_CHAR = chr(29)
 
 VMWARE_EXT = chr(232) # VMWARE-TELNET-EXT
 
@@ -1151,30 +1155,196 @@ class vSPC(Selector, VMExtHandler):
         self.start()
         self.run_forever()
 
-def do_query(host, port):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((host, port))
-    sockfile = s.makefile()
+class AdminProtocolClient(Selector):
+    def __init__(self, host, admin_port, vm_name, src, dst):
+        Selector.__init__(self)
+        self.admin_port = admin_port
+        self.host       = host
+        self.vm_name    = vm_name
+        # needed for the selector to work
+        assert hasattr(src, "fileno")
+        self.command_source = src
+        self.destination    = dst
 
-    # Trade versions
-    pickle.dump(Q_VERS, sockfile)
-    sockfile.flush()
-    server_vers = pickle.load(sockfile)
-    # Server chooses what we're doing
+    class Client(TelnetServer):
+        def __init__(self, sock,
+                     server_opts = (BINARY, SGA, ECHO),
+                     client_opts = (BINARY, SGA)):
+            TelnetServer.__init__(self, sock, server_opts, client_opts)
+            self.uuid = None
 
-    resp = pickle.load(sockfile)
-    if type(resp) == type(Exception()):
-        sys.stderr.write("Server complained: %s\n", str(resp))
-        sys.exit(3)
+    def connect_to_vspc(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((self.host, self.admin_port))
+        sockfile = s.makefile()
 
-    (vers, data) = resp
-    if vers == 1:
-        for vm in data:
+        unpickler = pickle.Unpickler(sockfile)
+
+        # trade protocol versions
+        pickle.dump(Q_VERS, sockfile)
+        sockfile.flush()
+        server_vers = int(unpickler.load())
+        if server_vers == 2:
+            pickle.dump(self.vm_name, sockfile)
+            sockfile.flush()
+            status = unpickler.load()
+            if status != Q_VM_OK:
+                if self.vm_name is not None:
+                    sys.stderr.write("The host '%s' couldn't find the vm '%s'. "
+                                     "The host knows about the following VMs:\n" % (self.host, self.vm_name))
+                vm_list = unpickler.load()
+                self.process_noninteractive(vm_list)
+                return None
+            seed_data = unpickler.load()
+            assert isinstance(seed_data, list)
+            for entry in seed_data:
+                self.destination.write(entry)
+
+        elif server_vers == 1:
+            vers, resp = unpickler.load()
+            assert vers == server_vers
+            self.process_noninteractive(resp)
+            return None
+
+        else:
+            sys.stderr.write("Server sent us a version %d response, "
+                             "which we don't understand. Bad!" % vers)
+            return None
+
+        # From this point on, we write data directly to s; the rest of
+        # the protocol doesn't bother with pickle.
+        client = self.Client(sock = s)
+        return client
+
+    def new_client_data(self, listener):
+        """
+        I'm called when we have new data to send to the vSPC.
+        """
+        data = listener.read()
+        if CLIENT_ESCAPE_CHAR in data:
+            loc = data.index(CLIENT_ESCAPE_CHAR)
+            pre_data = data[:loc]
+            self.send_buffered(self.vspc_socket, pre_data)
+            post_data = data[loc+1:]
+            data = self.process_escape_character() + post_data
+
+        self.send_buffered(self.vspc_socket, data)
+
+    def send_buffered(self, ts, s = ''):
+        if ts.send_buffered(s):
+            self.add_writer(ts, self.send_buffered)
+        else:
+            self.del_writer(ts)
+
+    def new_server_data(self, client):
+        """
+        I'm called when the AdminProtocolClient gets new data from the vSPC.
+        """
+        neg_done = False
+        try:
+            neg_done = client.negotiation_done()
+        except (EOFError, IOError, socket.error):
+            self.quit()
+
+        if not neg_done:
+            return
+
+        s = None
+        try:
+            s = client.read_very_lazy()
+        except (EOFError, IOError, socket.error):
+            self.quit()
+        if not s: # May only be option data, or exception
+            return
+
+        while s:
+            c = s[:100]
+            s = s[100:]
+            self.destination.write(c)
+
+    def process_escape_character(self):
+        self.restore_terminal()
+        ret = ""
+        while True:
+            c = raw_input("vspc> ")
+            if c == "quit":
+                self.quit()
+            elif c == "continue":
+                break
+            elif c == "print-escape":
+                ret = CLIENT_ESCAPE_CHAR
+                break
+            else:
+                help = ("quit:         exit the client\n"
+                        "continue:     exit this menu\n"
+                        "print-escape: send the escape sequence to the VM\n")
+                self.destination.write(help)
+        self.prepare_terminal()
+        return ret
+
+    def process_noninteractive(self, listing):
+        if type(listing) == type(Exception()):
+            sys.stderr.write("Server complained: %s\n" % str(listing))
+            return
+
+        for vm in listing:
             print "%s:%s:%d" % (vm[Q_NAME], vm[Q_UUID], vm[Q_PORT])
-    else:
-        sys.stderr.write("Server sent us a version %d response, "
-                         "which we don't understand. Bad!" % vers)
-        sys.exit(4)
+
+    def prepare_terminal(self):
+        fd = self.command_source
+        self.oldterm = termios.tcgetattr(fd)
+        newattr = self.oldterm[:]
+        # this is essentially cfmakeraw
+
+        # input modes
+        newattr[0] = newattr[0] & ~(termios.IGNBRK | termios.BRKINT | \
+                                    termios.PARMRK | termios.ISTRIP | \
+                                    termios.IGNCR | termios.ICRNL | \
+                                    termios.IXON)
+        # output modes
+        newattr[1] = newattr[1] & ~termios.OPOST
+        # local modes
+        newattr[3] = newattr[3] & ~(termios.ECHO | termios.ECHONL | \
+                                    termios.ICANON | termios.IEXTEN | termios.ISIG)
+        # special characters
+        newattr[2] = newattr[2] & ~(termios.CSIZE | termios.PARENB)
+        newattr[2] = newattr[2] | termios.CS8
+
+        termios.tcsetattr(fd, termios.TCSANOW, newattr)
+
+        self.oldflags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, self.oldflags | os.O_NONBLOCK)
+
+    def restore_terminal(self):
+        fd = self.command_source
+        termios.tcsetattr(fd, termios.TCSAFLUSH, self.oldterm)
+        fcntl.fcntl(fd, fcntl.F_SETFL, self.oldflags)
+
+    def quit(self):
+        self.restore_terminal()
+        self.vspc_socket.close()
+        sys.exit(0)
+
+    def run(self):
+        s = self.connect_to_vspc()
+        if s is None:
+            return
+
+        try:
+            self.prepare_terminal()
+            self.vspc_socket = s
+
+            self.add_reader(self.vspc_socket, self.new_server_data)
+            self.add_reader(self.command_source, self.new_client_data)
+            self.run_forever()
+        except Exception, e:
+            sys.stderr.write("Caught exception %s, closing" % e)
+        finally:
+            self.quit()
+
+def do_query(host, port, vm_name=None):
+    client = AdminProtocolClient(host, port, vm_name, sys.stdin, sys.stdout)
+    client.run()
 
 def get_backend_type(shortname):
     name = "vSPCBackend" + shortname
@@ -1385,13 +1555,27 @@ if __name__ == '__main__':
         usage()
         sys.exit(2)
 
+    logger = logging.getLogger('')
+    logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    if syslog:
+        from logging.handlers import SysLogHandler
+        from logging import Formatter
+        formatter = Formatter(fmt="vSPC.py[%(process)d]: %(message)s")
+        handler = SysLogHandler(address="/dev/log")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
     if not server_mode:
-        if len(args) != 1:
-            print "Expected 1 argument, found %d" % len(args)
+        if len(args) < 1 or len(args) > 2:
+            print "Expected 1 or 2 arguments, found %d" % len(args)
             usage()
             sys.exit(2)
 
-        sys.exit(do_query(args[0], admin_port))
+        vm_name = None
+        if len(args) == 2:
+            vm_name = args[1]
+
+        sys.exit(do_query(args[0], admin_port, vm_name))
 
     # Server mode
 
@@ -1407,16 +1591,6 @@ if __name__ == '__main__':
 
     backend = get_backend_type(backend_type_name)()
     backend.setup(backend_args)
-
-    logger = logging.getLogger('')
-    logger.setLevel(logging.DEBUG if debug else logging.INFO)
-    if syslog:
-        from logging.handlers import SysLogHandler
-        from logging import Formatter
-        formatter = Formatter(fmt="vSPC.py[%(process)d]: %(message)s")
-        handler = SysLogHandler(address="/dev/log")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
 
     if fork:
         daemonize()

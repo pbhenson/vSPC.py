@@ -518,13 +518,21 @@ class Selector:
             # interrupted syscall
             return False
         for reader in readers:
-            self.read_handlers[reader](reader)
+            try:
+                self.read_handlers[reader](reader)
+            except KeyError:
+                # deleted by the worker thread in vSPC
+                pass
         for writer in writers:
-            self.write_handlers[writer](writer)
+            try:
+                self.write_handlers[writer](writer)
+            except KeyError:
+                # deleted by the worker thread in vSPC
+                pass
 
     def run_forever(self):
         while True:
-            self.run_once()
+            self.run_once(timeout=1.5)
 
 class vSPCBackendMemory:
     ADMIN_THREADS = 4
@@ -773,35 +781,64 @@ class vSPC(Selector, VMExtHandler):
         self.ssl_cert = ssl_cert
         self.ssl_key = ssl_key
 
+        self.task_queue = Queue.Queue()
+        self.task_queue_threads = []
+
+    def _queue_run(self, queue):
+        while True:
+            try:
+                queue.get()()
+            except Exception, e:
+                logging.exception("Worker exception caught")
+
+    def task_queue_run(self):
+        self._queue_run(self.task_queue)
+
+    def start(self):
+        self.task_queue_threads.append(self._start_thread(self.task_queue_run))
+
+    def _start_thread(self, f):
+        th = threading.Thread(target = f)
+        th.daemon = True
+        th.start()
+
+        return th
+
     def send_buffered(self, ts, s = ''):
         if ts.send_buffered(s):
             self.add_writer(ts, self.send_buffered)
         else:
             self.del_writer(ts)
 
-    def new_vm_connection(self, listener):
-        sock = listener.accept()[0]
+    def new_vm_connection(self, sock):
         sock.setblocking(0)
         sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
         vt = VMTelnetServer(sock, handler = self)
-        self.add_reader(vt, self.new_vm_data)
+        self.add_reader(vt, self.queue_new_vm_data)
 
-    def new_client_connection(self, vm):
-        sock = vm.listener.accept()[0]
+    def queue_new_vm_connection(self, listener):
+        sock = listener.accept()[0]
+        self.task_queue.put(lambda: self.new_vm_connection(sock))
+
+    def new_client_connection(self, sock, vm):
         sock.setblocking(0)
         sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
 
         client = self.Client(sock)
         client.uuid = vm.uuid
 
-        self.add_reader(client, self.new_client_data)
+        self.add_reader(client, self.queue_new_client_data)
         vm.clients.append(client)
 
         logging.debug('uuid %s new client, %d active clients'
                       % (client.uuid, len(vm.clients)))
 
+    def queue_new_client_connection(self, vm):
+        sock = vm.listener.accept()[0]
+        self.task_queue.put(lambda: self.new_client_connection(sock, vm))
+
     def abort_vm_connection(self, vt):
-        if vt.uuid:
+        if vt.uuid and vt in self.vms[vt.uuid].vts:
             logging.debug('uuid %s VM socket closed' % vt.uuid)
             self.vms[vt.uuid].vts.remove(vt)
             self.stamp_orphan(self.vms[vt.uuid])
@@ -845,6 +882,9 @@ class vSPC(Selector, VMExtHandler):
             except (EOFError, IOError, socket.error), e:
                 logging.debug('cl.socket send error: %s' % (str(e)))
 
+    def queue_new_vm_data(self, vt):
+        self.task_queue.put(lambda: self.new_vm_data(vt))
+
     def abort_client_connection(self, client):
         logging.debug('uuid %s client socket closed, %d active clients' %
                       (client.uuid, len(self.vms[client.uuid].clients)-1))
@@ -882,6 +922,9 @@ class vSPC(Selector, VMExtHandler):
                 self.send_buffered(vt, s)
             except (EOFError, IOError, socket.error), e:
                 logging.debug('cl.socket send error: %s' % (str(e)))
+
+    def queue_new_client_data(self, client):
+        self.task_queue.put(lambda: self.new_client_data(client))
 
     def new_vm(self, uuid, name, port = None, vts = None):
         vm = self.Vm(uuid = uuid, name = name, vts = vts)
@@ -989,10 +1032,13 @@ class vSPC(Selector, VMExtHandler):
             self.orphans.append(vm.uuid)
             vm.last_time = time.time()
 
-    def new_admin_connection(self, listener):
-        sock = listener.accept()[0]
+    def new_admin_connection(self, sock):
         self.collect_orphans()
         backend.notify_query_socket(sock, self)
+
+    def queue_new_admin_connection(self, listener):
+        sock = listener.accept()[0]
+        self.task_queue.put(lambda: self.new_admin_connection(sock))
 
     def collect_orphans(self):
         t = time.time()
@@ -1041,7 +1087,7 @@ class vSPC(Selector, VMExtHandler):
         self.ports[vm.port] = vm.uuid
 
         vm.listener = openport(vm.port)
-        self.add_reader(vm, self.new_client_connection)
+        self.add_reader(vm, self.queue_new_client_connection)
 
     def create_old_vms(self, vms):
         for vm in vms:
@@ -1054,8 +1100,9 @@ class vSPC(Selector, VMExtHandler):
 
         self.create_old_vms(self.backend.get_observed_vms())
 
-        self.add_reader(openport(self.proxy_port, self.do_ssl, self.ssl_cert, self.ssl_key), self.new_vm_connection)
-        self.add_reader(openport(self.admin_port), self.new_admin_connection)
+        self.add_reader(openport(self.proxy_port, self.do_ssl, self.ssl_cert, self.ssl_key), self.queue_new_vm_connection)
+        self.add_reader(openport(self.admin_port), self.queue_new_admin_connection)
+        self.start()
         self.run_forever()
 
 def do_query(host, port):

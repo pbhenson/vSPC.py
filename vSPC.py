@@ -1515,7 +1515,7 @@ if __name__ == '__main__':
                                         'server', 'stdout', 'no-fork', 'ssl',
                                         'vm-expire-time=', "cert=", "key=",
                                         'backend=', 'backend-args=',
-                                        'backend-help',
+                                        'backend-help', "no-vm-ports",
                                         'persist-file=', 'pidfile='])
         for o,a in opts:
             if o in ['-h', '--help']:
@@ -1558,6 +1558,8 @@ if __name__ == '__main__':
                 ssl_key = a
             elif o in ['--pidfile']:
                 pidfile = a
+            elif o in ['--no-vm-ports']:
+                vm_port_start = None
             else:
                 assert False, 'unhandled option'
     except getopt.GetoptError, err:

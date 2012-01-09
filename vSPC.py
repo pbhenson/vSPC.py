@@ -1040,6 +1040,21 @@ class vSPC(Selector, VMExtHandler):
         sock = listener.accept()[0]
         self.task_queue.put(lambda: self.new_admin_connection(sock))
 
+    def new_admin_client_connection(self, sock, uuid):
+        client = self.Client(sock)
+        client.uuid = uuid
+
+        vm = self.vms[uuid]
+
+        self.add_reader(client, self.queue_new_client_data)
+        vm.clients.append(client)
+
+        logging.debug('uuid %s new client, %d active clients'
+                      % (client.uuid, len(vm.clients)))
+
+    def queue_new_admin_client_connection(self, sock, uuid):
+        self.task_queue.put(lambda: self.new_admin_client_connection(sock, uuid))
+
     def collect_orphans(self):
         t = time.time()
 

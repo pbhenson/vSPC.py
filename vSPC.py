@@ -77,10 +77,12 @@ VM_PORT_START = 50000
 VM_EXPIRE_TIME = 24*3600
 
 # Query protocol
-Q_VERS = 1
-Q_NAME = 'name'
-Q_UUID = 'uuid'
-Q_PORT = 'port'
+Q_VERS        = 1
+Q_NAME        = 'name'
+Q_UUID        = 'uuid'
+Q_PORT        = 'port'
+Q_VM_OK       = 'found'
+Q_VM_NOTFOUND = 'notfound'
 
 # Persistence fields
 P_UUID = 'uuid'
@@ -676,7 +678,20 @@ class vSPCBackendMemory:
         logging.debug("version %d query", vers)
 
         try:
-            if vers == 1:
+            if vers == 2:
+                vm_name = pickle.load(sockfile)
+                vm = self.observed_vm_for_name(vm_name)
+                status = Q_VM_NOTFOUND
+                if vm is not None:
+                    status = Q_VM_OK
+                    pickle.dump(status, sockfile)
+                    pickle.dump(self.get_seed_data(vm.uuid), sockfile)
+                    sockfile.flush()
+                    vspc.queue_new_admin_client_connection(sock, vm.uuid)
+                else:
+                    pickle.dump(status, sockfile)
+                    pickle.dump(self.format_vm_listing(), sockfile)
+            elif vers == 1:
                 pickle.dump((vers, self.format_vm_listing()), sockfile)
             else:
                 pickle.dump(Exception('No common version'), sockfile)
@@ -691,6 +706,15 @@ class vSPCBackendMemory:
         for vm in vms:
             l.append({Q_NAME: vm.name, Q_UUID: vm.uuid, Q_PORT: vm.port})
         return l
+
+    def observed_vm_for_name(self, name):
+        if name is None: return None
+
+        vms = self.get_observed_vms()
+        for vm in vms:
+            if vm.name == name or vm.uuid == name:
+                return vm
+        return None
 
 class vSPCBackendFile(vSPCBackendMemory):
     def __init__(self):

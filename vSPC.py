@@ -489,6 +489,106 @@ def openport(port, use_ssl=False, ssl_cert=None, ssl_key=None):
     sock.listen(LISTEN_BACKLOG)
     return sock
 
+class Poller:
+    def __init__(self):
+        # stream => func
+        self.read_handlers = {}
+        self.write_handlers = {}
+
+        # fileno => stream
+        self.fds = {}
+        # stream => epoll mask
+        self.fd_mask = {}
+
+        self.lock = threading.Lock()
+
+        self.epoll = select.epoll()
+
+    def add_stream(self, stream):
+        # called with self.lock
+        self.fds[stream.fileno()] = stream
+        self.fd_mask[stream] = 0
+        self.epoll.register(stream, self.fd_mask[stream])
+
+    def add_reader(self, stream, func):
+        with self.lock:
+            if stream.fileno() not in self.fds:
+                self.add_stream(stream)
+
+            self.read_handlers[stream] = func
+
+            assert stream in self.fd_mask
+            self.fd_mask[stream] |= select.EPOLLIN
+
+            self.epoll.modify(stream, self.fd_mask[stream])
+
+    def del_reader(self, stream):
+        with self.lock:
+            try:
+                self.fd_mask[stream] &= ~select.EPOLLIN
+                self.epoll.modify(stream, self.fd_mask[stream])
+            except KeyError:
+                pass
+
+    def add_writer(self, stream, func):
+        with self.lock:
+            if stream.fileno() not in self.fds:
+                self.add_stream(stream)
+
+            self.write_handlers[stream] = func
+
+            assert stream in self.fd_mask
+            self.fd_mask[stream] |= select.EPOLLOUT
+
+            self.epoll.modify(stream, self.fd_mask[stream])
+
+    def del_writer(self, stream):
+        with self.lock:
+            try:
+                self.fd_mask[stream] &= ~select.EPOLLOUT
+                self.epoll.modify(stream, self.fd_mask[stream])
+            except KeyError:
+                pass
+
+    def del_all(self, stream):
+        self.del_reader(stream)
+        self.del_writer(stream)
+
+    def remove_fd(self, fd):
+        self.epoll.unregister(fd)
+        del self.fds[fd.fileno()]
+        del self.fd_mask[fd]
+
+    def run_once(self, timeout = -1):
+        try:
+            events = self.epoll.poll(timeout)
+        except IOError, e:
+            # interrupted syscall
+            return False
+        for (fileno, event) in events:
+            if event == select.EPOLLIN:
+                # read event
+                with self.lock:
+                    fd = self.fds[fileno]
+                    handler = self.read_handlers[fd]
+                handler(fd)
+            elif event == select.EPOLLOUT:
+                # write event
+                with self.lock:
+                    fd = self.fds[fileno]
+                    handler = self.write_handlers[fd]
+                handler(fd)
+            else:
+                # Event that we don't know how to handle.
+                logging.debug("I was asked to handle an unsupported event (%d) "
+                              "for fd %d. I'm removing fd %d" % (event, fileno, fileno))
+                with self.lock:
+                    self.remove_fd(fd)
+
+    def run_forever(self):
+        while True:
+            self.run_once()
+
 class Selector:
     def __init__(self):
         self.read_handlers = {}

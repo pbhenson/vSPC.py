@@ -987,12 +987,15 @@ class vSPC(Poller, VMExtHandler):
             neg_done = vt.negotiation_done()
         except (EOFError, IOError, socket.error):
             self.abort_vm_connection(vt)
+            return
 
         if not neg_done:
+            self.add_reader(vt, self.queue_new_vm_data)
             return
 
         # Queue VM data during vmotion
         if vt.uuid and self.vms[vt.uuid].vmotion:
+            self.add_reader(vt, self.queue_new_vm_data)
             return
 
         s = None
@@ -1000,12 +1003,15 @@ class vSPC(Poller, VMExtHandler):
             s = vt.read_very_lazy()
         except (EOFError, IOError, socket.error):
             self.abort_vm_connection(vt)
+            return
 
         if not s: # May only be option data, or exception
+            self.add_reader(vt, self.queue_new_vm_data)
             return
 
         if not vt.uuid or not self.vms.has_key(vt.uuid):
             # In limbo, no one can hear you scream
+            self.add_reader(vt, self.queue_new_vm_data)
             return
 
         # logging.debug('new_vm_data %s: %s' % (vt.uuid, repr(s)))
@@ -1016,15 +1022,19 @@ class vSPC(Poller, VMExtHandler):
                 self.send_buffered(cl, s)
             except (EOFError, IOError, socket.error), e:
                 logging.debug('cl.socket send error: %s' % (str(e)))
+        self.add_reader(vt, self.queue_new_vm_data)
 
     def queue_new_vm_data(self, vt):
+        # Don't alert repeatedly on the same input
+        self.del_reader(vt)
         self.task_queue.put(lambda: self.new_vm_data(vt))
 
     def abort_client_connection(self, client):
         logging.debug('uuid %s client socket closed, %d active clients' %
                       (client.uuid, len(self.vms[client.uuid].clients)-1))
-        self.vms[client.uuid].clients.remove(client)
-        self.stamp_orphan(self.vms[client.uuid])
+        if client in self.vms[client.uuid].clients:
+            self.vms[client.uuid].clients.remove(client)
+            self.stamp_orphan(self.vms[client.uuid])
         self.del_all(client)
 
     def new_client_data(self, client):
@@ -1033,12 +1043,15 @@ class vSPC(Poller, VMExtHandler):
             neg_done = client.negotiation_done()
         except (EOFError, IOError, socket.error):
             self.abort_client_connection(client)
+            return
 
         if not neg_done:
+            self.add_reader(client, self.queue_new_client_data)
             return
 
         # Queue VM data during vmotion
         if self.vms[client.uuid].vmotion:
+            self.add_reader(client, self.queue_new_client_data)
             return
 
         s = None
@@ -1046,8 +1059,10 @@ class vSPC(Poller, VMExtHandler):
             s = client.read_very_lazy()
         except (EOFError, IOError, socket.error):
             self.abort_client_connection(client)
+            return
 
         if not s: # May only be option data, or exception
+            self.add_reader(client, self.queue_new_client_data)
             return
 
         # logging.debug('new_client_data %s: %s' % (client.uuid, repr(s)))
@@ -1057,8 +1072,11 @@ class vSPC(Poller, VMExtHandler):
                 self.send_buffered(vt, s)
             except (EOFError, IOError, socket.error), e:
                 logging.debug('cl.socket send error: %s' % (str(e)))
+        self.add_reader(client, self.queue_new_client_data)
 
     def queue_new_client_data(self, client):
+        # Don't alert repeatedly on the same input
+        self.del_reader(client)
         self.task_queue.put(lambda: self.new_client_data(client))
 
     def new_vm(self, uuid, name, port = None, vts = None):

@@ -875,7 +875,7 @@ class vSPCBackendFile(vSPCBackendMemory):
 
         return vms
 
-class vSPC(Selector, VMExtHandler):
+class vSPC(Poller, VMExtHandler):
     class Vm:
         def __init__(self, uuid = None, name = None, vts = None):
             self.vts = vts if vts else []
@@ -900,7 +900,7 @@ class vSPC(Selector, VMExtHandler):
     def __init__(self, proxy_port, admin_port,
                  vm_port_start, vm_expire_time, backend, use_ssl=False,
                  ssl_cert=None, ssl_key=None):
-        Selector.__init__(self)
+        Poller.__init__(self)
 
         self.proxy_port = proxy_port
         self.admin_port = admin_port
@@ -1262,9 +1262,9 @@ class vSPC(Selector, VMExtHandler):
         self.start()
         self.run_forever()
 
-class AdminProtocolClient(Selector):
+class AdminProtocolClient(Poller):
     def __init__(self, host, admin_port, vm_name, src, dst):
-        Selector.__init__(self)
+        Poller.__init__(self)
         self.admin_port = admin_port
         self.host       = host
         self.vm_name    = vm_name

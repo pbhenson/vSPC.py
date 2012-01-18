@@ -103,7 +103,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
     def reload(self):
         for k, f in self.logfiles.iteritems():
             f.close()
-            self.logfiles[k] = self.file_for_vm(self.vm_names[uuid], uuid)
+            self.logfiles[k] = self.file_for_vm(self.vm_names[k], k)
 
     def handle_sighup(self, signum, frame):
         assert signum == signal.SIGHUP

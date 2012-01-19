@@ -1295,7 +1295,10 @@ class AdminProtocolClient(Selector):
             return
 
         for vm in listing:
-            print "%s:%s:%d" % (vm[Q_NAME], vm[Q_UUID], vm[Q_PORT])
+            out = "%s:%s" % (vm[Q_NAME], vm[Q_UUID])
+            if vm[Q_PORT] is not None:
+                out += ":%d" % vm[Q_PORT]
+            print out
 
     def prepare_terminal(self):
         fd = self.command_source

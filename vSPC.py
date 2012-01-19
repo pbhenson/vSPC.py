@@ -83,8 +83,15 @@ Q_VERS        = 2
 Q_NAME        = 'name'
 Q_UUID        = 'uuid'
 Q_PORT        = 'port'
-Q_VM_OK       = 'found'
-Q_VM_NOTFOUND = 'notfound'
+Q_OK          = 'vm_found'
+Q_VM_NOTFOUND = 'vm_not_found'
+# Exclusive write and read access; no other clients have any access to the VM.
+Q_LOCK_EXCL   = "exclusive"
+# Exclusive write access; other clients can watch the session
+Q_LOCK_WRITE  = "write"
+Q_LOCK_NONE   = "none"
+Q_LOCK_BAD    = "lock_invalid"
+Q_LOCK_FAILED = "lock_failed"
 
 # Persistence fields
 P_UUID = 'uuid'

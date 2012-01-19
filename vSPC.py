@@ -791,17 +791,25 @@ class vSPCBackendMemory:
         try:
             if vers == 2:
                 vm_name = pickle.load(sockfile)
+                lock_mode = pickle.load(sockfile)
                 vm = self.observed_vm_for_name(vm_name)
-                status = Q_VM_NOTFOUND
-                if vm is not None:
-                    status = Q_VM_OK
-                    pickle.dump(status, sockfile)
+
+                if vm is not None and lock_mode in (Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_NONE):
+                    status = Q_OK
+                elif vm is None:
+                    status = Q_VM_NOTFOUND
+                else:
+                    status = Q_LOCK_BAD
+                pickle.dump(status, sockfile)
+
+                if status == Q_OK:
                     pickle.dump(self.get_seed_data(vm.uuid), sockfile)
                     sockfile.flush()
                     vspc.queue_new_admin_client_connection(sock, vm.uuid)
-                else:
-                    pickle.dump(status, sockfile)
+                elif status == Q_VM_NOTFOUND:
                     pickle.dump(self.format_vm_listing(), sockfile)
+                else: # unknown lock mode
+                    pass
             elif vers == 1:
                 pickle.dump((vers, self.format_vm_listing()), sockfile)
             else:
@@ -1318,15 +1326,21 @@ class AdminProtocolClient(Poller):
         server_vers = int(unpickler.load())
         if server_vers == 2:
             pickle.dump(self.vm_name, sockfile)
+            pickle.dump(Q_LOCK_WRITE, sockfile)
             sockfile.flush()
             status = unpickler.load()
-            if status != Q_VM_OK:
+            if status == Q_VM_NOTFOUND:
                 if self.vm_name is not None:
                     sys.stderr.write("The host '%s' couldn't find the vm '%s'. "
                                      "The host knows about the following VMs:\n" % (self.host, self.vm_name))
                 vm_list = unpickler.load()
                 self.process_noninteractive(vm_list)
                 return None
+            elif status == Q_LOCK_BAD:
+                sys.stderr.write("The host doesn't understand how to give me a write lock\n")
+                return None
+
+            assert status == Q_OK
             seed_data = unpickler.load()
             assert isinstance(seed_data, list)
             for entry in seed_data:

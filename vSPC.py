@@ -801,7 +801,10 @@ class vSPCBackendMemory:
                 vm = self.observed_vm_for_name(vm_name)
 
                 if vm is not None and lock_mode in (Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_NONE):
-                    status = Q_OK
+                    status = Q_LOCK_FAILED
+                    with vm.modification_lock:
+                        if self.try_to_lock_vm(vm, sock, lock_mode):
+                            status = Q_OK
                 elif vm is None:
                     status = Q_VM_NOTFOUND
                 else:
@@ -814,7 +817,7 @@ class vSPCBackendMemory:
                     vspc.queue_new_admin_client_connection(sock, vm.uuid)
                 elif status == Q_VM_NOTFOUND:
                     pickle.dump(self.format_vm_listing(), sockfile)
-                else: # unknown lock mode
+                else: # unknown lock mode, or lock acquisition failed
                     pass
             elif vers == 1:
                 pickle.dump((vers, self.format_vm_listing()), sockfile)
@@ -1391,6 +1394,9 @@ class AdminProtocolClient(Poller):
                 return None
             elif status == Q_LOCK_BAD:
                 sys.stderr.write("The host doesn't understand how to give me a write lock\n")
+                return None
+            elif status == Q_LOCK_FAILED:
+                sys.stderr.write("Someone else has a write lock on the VM\n")
                 return None
 
             assert status == Q_OK

@@ -1398,7 +1398,7 @@ class vSPC(Poller, VMExtHandler):
         self.run_forever()
 
 class AdminProtocolClient(Poller):
-    def __init__(self, host, admin_port, vm_name, src, dst):
+    def __init__(self, host, admin_port, vm_name, src, dst, lock_mode=Q_LOCK_WRITE):
         Poller.__init__(self)
         self.admin_port = admin_port
         self.host       = host
@@ -1407,6 +1407,7 @@ class AdminProtocolClient(Poller):
         assert hasattr(src, "fileno")
         self.command_source = src
         self.destination    = dst
+        self.lock_mode      = lock_mode
 
     class Client(TelnetServer):
         def __init__(self, sock,
@@ -1428,7 +1429,7 @@ class AdminProtocolClient(Poller):
         server_vers = int(unpickler.load())
         if server_vers == 2:
             pickle.dump(self.vm_name, sockfile)
-            pickle.dump(Q_LOCK_WRITE, sockfile)
+            pickle.dump(self.lock_mode, sockfile)
             sockfile.flush()
             status = unpickler.load()
             if status == Q_VM_NOTFOUND:

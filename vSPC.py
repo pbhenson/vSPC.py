@@ -821,8 +821,8 @@ class vSPCBackendMemory:
                    lock_mode in (Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR):
                     status = Q_LOCK_FAILED
                     with vm.modification_lock:
-                        if self.try_to_lock_vm(vm, sock, lock_mode):
-                            status = Q_OK
+                        lock_result = self.try_to_lock_vm(vm, sock, lock_mode)
+                        if lock_result: status = Q_OK
                 elif vm is None:
                     status = Q_VM_NOTFOUND
                 else:
@@ -833,7 +833,7 @@ class vSPCBackendMemory:
                     pickle.dump(self.get_seed_data(vm.uuid), sockfile)
                     sockfile.flush()
                     readonly = False
-                    if vm.lock_mode == Q_LOCK_FFAR:
+                    if lock_result == Q_LOCK_FFAR:
                         readonly = True
                     vspc.queue_new_admin_client_connection(sock, vm.uuid, readonly)
                 elif status == Q_VM_NOTFOUND:

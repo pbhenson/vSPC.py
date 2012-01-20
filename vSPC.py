@@ -830,6 +830,7 @@ class vSPCBackendMemory:
                 pickle.dump(status, sockfile)
 
                 if status == Q_OK:
+                    pickle.dump(lock_result, sockfile)
                     pickle.dump(self.get_seed_data(vm.uuid), sockfile)
                     sockfile.flush()
                     readonly = False
@@ -1445,6 +1446,9 @@ class AdminProtocolClient(Poller):
                 return None
 
             assert status == Q_OK
+            applied_lock_mode = unpickler.load()
+            if applied_lock_mode == Q_LOCK_FFAR:
+                self.destination.write("Someone else has an exclusive write lock; operating in read-only mode\n")
             seed_data = unpickler.load()
             assert isinstance(seed_data, list)
             for entry in seed_data:

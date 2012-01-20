@@ -89,7 +89,11 @@ Q_VM_NOTFOUND = 'vm_not_found'
 Q_LOCK_EXCL   = "exclusive"
 # Exclusive write access; other clients can watch the session
 Q_LOCK_WRITE  = "write"
-Q_LOCK_NONE   = "none"
+# Nonexclusive write access; other clients may watch and interact with the VM.
+Q_LOCK_FFA    = "free_for_all"
+# Same as FFA, but with a fallback to read access if the VM is locked in
+# nonexclusive mode.
+Q_LOCK_FFAR   = "free_for_all_or_readonly"
 Q_LOCK_BAD    = "lock_invalid"
 Q_LOCK_FAILED = "lock_failed"
 
@@ -813,7 +817,8 @@ class vSPCBackendMemory:
                 lock_mode = pickle.load(sockfile)
                 vm = self.observed_vm_for_name(vm_name)
 
-                if vm is not None and lock_mode in (Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_NONE):
+                if vm is not None and \
+                   lock_mode in (Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR):
                     status = Q_LOCK_FAILED
                     with vm.modification_lock:
                         if self.try_to_lock_vm(vm, sock, lock_mode):
@@ -909,12 +914,17 @@ class vSPCBackendMemory:
                     logging.debug("Other writers, bail out")
                     vm.lock.release()
 
-        elif lock_mode == Q_LOCK_NONE:
+        elif lock_mode in (Q_LOCK_FFA, Q_LOCK_FFAR):
             logging.debug("free-for-all selected")
             if vm.lockholder is None:
                 logging.debug("No one thinks they have exclusive write access, returning True")
                 vm.lock_mode = Q_LOCK_FFA
                 vm.writers.append(sock)
+                vm.readers.append(sock)
+                return True
+
+            if vm.lock_mode is not Q_LOCK_EXCL and lock_mode == Q_LOCK_FFAR:
+                logging.debug("VM has a write lock, adding as read-only")
                 vm.readers.append(sock)
                 return True
 

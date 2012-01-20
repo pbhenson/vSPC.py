@@ -756,6 +756,18 @@ class vSPCBackendMemory:
         logging.debug("vm_msg_hook: uuid: %s, name: %s, msg: %s" %
                       (uuid, name, s))
 
+    def notify_client_del(self, sock, uuid):
+        self.hook_queue.put(lambda: self.client_del(sock, uuid))
+
+    def client_del(self, sock, uuid):
+        logging.debug("client_del: uuid %s, client %s" % (uuid, sock))
+        vm = None
+        with self.observed_vms_lock:
+            if uuid in self.observed_vms: vm = self.observed_vms[uuid]
+        if vm is not None:
+            with vm.modification_lock:
+                self.maybe_unlock_vm(vm, sock)
+
     def notify_vm_del(self, uuid):
         self.observer_queue.put(lambda: self.vm_del(uuid))
 

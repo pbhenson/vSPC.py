@@ -1600,8 +1600,8 @@ class AdminProtocolClient(Poller):
         finally:
             self.quit()
 
-def do_query(host, port, vm_name=None):
-    client = AdminProtocolClient(host, port, vm_name, sys.stdin, sys.stdout)
+def do_query(host, port, vm_name=None, lock_mode=Q_LOCK_FFAR):
+    client = AdminProtocolClient(host, port, vm_name, sys.stdin, sys.stdout, lock_mode)
     client.run()
 
 def get_backend_type(shortname):
@@ -1755,6 +1755,7 @@ if __name__ == '__main__':
     ssl_cert = None
     ssl_key = None
     pidfile = None
+    client_lock_mode = "free-for-all-fallback"
 
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], 'a:f:hdp:r:s',
@@ -1763,7 +1764,7 @@ if __name__ == '__main__':
                                         'server', 'stdout', 'no-fork', 'ssl',
                                         'vm-expire-time=', "cert=", "key=",
                                         'backend=', 'backend-args=',
-                                        'backend-help', "no-vm-ports",
+                                        'backend-help', "no-vm-ports", "client-lock-mode=",
                                         'persist-file=', 'pidfile='])
         for o,a in opts:
             if o in ['-h', '--help']:
@@ -1808,6 +1809,8 @@ if __name__ == '__main__':
                 pidfile = a
             elif o in ['--no-vm-ports']:
                 vm_port_start = None
+            elif o in ["--client-lock-mode"]:
+                client_lock_mode = a
             else:
                 assert False, 'unhandled option'
     except getopt.GetoptError, err:
@@ -1831,11 +1834,27 @@ if __name__ == '__main__':
             usage()
             sys.exit(2)
 
+        if client_lock_mode not in ("exclusive", "write", "free-for-all", "free-for-all-fallback"):
+            print "%s isn't a valid lock mode" % client_lock_mode
+            print "valid lock modes are: exclusive, write, free-for-all, and free-for-all-fallback"
+            usage()
+            sys.exit(2)
+        else:
+            if client_lock_mode == "exclusive":
+                lock_mode = Q_LOCK_EXCL
+            elif client_lock_mode == "write":
+                lock_mode = Q_LOCK_WRITE
+            elif client_lock_mode == "free-for-all":
+                lock_mode = Q_LOCK_FFA
+            else:
+                assert client_lock_mode == "free-for-all-fallback"
+                lock_mode = Q_LOCK_FFAR
+
         vm_name = None
         if len(args) == 2:
             vm_name = args[1]
 
-        sys.exit(do_query(args[0], admin_port, vm_name))
+        sys.exit(do_query(args[0], admin_port, vm_name, lock_mode))
 
     # Server mode
 

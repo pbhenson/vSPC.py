@@ -896,7 +896,7 @@ class vSPCBackendMemory:
                     vm.lock_mode = lock_mode
                     vm.readers.append(sock)
                     vm.writers.append(sock)
-                    return True
+                    return lock_mode
                 else:
                     logging.debug("clients or writers; releasing lock")
                     vm.lock.release()
@@ -912,7 +912,7 @@ class vSPCBackendMemory:
                     vm.lock_mode = lock_mode
                     vm.readers.append(sock)
                     vm.writers.append(sock)
-                    return True
+                    return lock_mode
                 else:
                     logging.debug("Other writers, bail out")
                     vm.lock.release()
@@ -924,12 +924,12 @@ class vSPCBackendMemory:
                 vm.lock_mode = Q_LOCK_FFA
                 vm.writers.append(sock)
                 vm.readers.append(sock)
-                return True
+                return Q_LOCK_FFA
 
             if vm.lock_mode is not Q_LOCK_EXCL and lock_mode == Q_LOCK_FFAR:
                 logging.debug("VM has a write lock, adding as read-only")
                 vm.readers.append(sock)
-                return True
+                return Q_LOCK_FFAR
 
         logging.debug("Lock acquisition failed, returning False")
         return False

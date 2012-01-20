@@ -661,6 +661,7 @@ class vSPCBackendMemory:
             self.writers = []
             self.readers = []
             self.lockholder = None
+            self.lock_mode = None
             self.lock = threading.Lock()
 
     def __init__(self):
@@ -867,6 +868,8 @@ class vSPCBackendMemory:
             vm.writers.remove(sock)
         if sock in vm.readers:
             vm.readers.remove(sock)
+        if not vm.writers:
+            vm.lock_mode = None
 
     def try_to_lock_vm(self, vm, sock, lock_mode):
         """
@@ -882,6 +885,7 @@ class vSPCBackendMemory:
                 if not vm.readers and not vm.writers:
                     logging.debug("No clients and no other writers; we're good")
                     vm.lockholder = sock
+                    vm.lock_mode = lock_mode
                     vm.readers.append(sock)
                     vm.writers.append(sock)
                     return True
@@ -897,6 +901,7 @@ class vSPCBackendMemory:
                 if not vm.writers:
                     logging.debug("No other writers; we're good")
                     vm.lockholder = sock
+                    vm.lock_mode = lock_mode
                     vm.readers.append(sock)
                     vm.writers.append(sock)
                     return True
@@ -908,6 +913,7 @@ class vSPCBackendMemory:
             logging.debug("free-for-all selected")
             if vm.lockholder is None:
                 logging.debug("No one thinks they have exclusive write access, returning True")
+                vm.lock_mode = Q_LOCK_FFA
                 vm.writers.append(sock)
                 vm.readers.append(sock)
                 return True

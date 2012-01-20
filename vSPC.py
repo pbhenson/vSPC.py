@@ -1324,7 +1324,7 @@ class vSPC(Poller, VMExtHandler):
         logging.debug('uuid %s new client, %d active clients'
                       % (client.uuid, len(vm.clients)))
 
-    def queue_new_admin_client_connection(self, sock, uuid, readonly=False):
+    def queue_new_admin_client_connection(self, sock, uuid, readonly):
         self.task_queue.put(lambda: self.new_admin_client_connection(sock, uuid, readonly))
 
     def collect_orphans(self):
@@ -1399,7 +1399,7 @@ class vSPC(Poller, VMExtHandler):
         self.run_forever()
 
 class AdminProtocolClient(Poller):
-    def __init__(self, host, admin_port, vm_name, src, dst, lock_mode=Q_LOCK_WRITE):
+    def __init__(self, host, admin_port, vm_name, src, dst, lock_mode):
         Poller.__init__(self)
         self.admin_port = admin_port
         self.host       = host

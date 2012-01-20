@@ -1131,6 +1131,7 @@ class vSPC(Poller, VMExtHandler):
             self.vms[client.uuid].clients.remove(client)
             self.stamp_orphan(self.vms[client.uuid])
         self.del_all(client)
+        self.backend.notify_client_del(client.sock, client.uuid)
 
     def new_client_data(self, client):
         neg_done = False

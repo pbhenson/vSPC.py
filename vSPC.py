@@ -1137,6 +1137,7 @@ class vSPC(Poller, VMExtHandler):
                 self.send_buffered(cl, s)
             except (EOFError, IOError, socket.error), e:
                 logging.debug('cl.socket send error: %s' % (str(e)))
+                self.abort_client_connection(cl)
         self.add_reader(vt, self.queue_new_vm_data)
 
     def queue_new_vm_data(self, vt):

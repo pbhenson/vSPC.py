@@ -841,6 +841,53 @@ class vSPCBackendMemory:
                 return vm
         return None
 
+    def try_to_lock_vm(self, vm, sock, lock_mode):
+        """
+        I try to acquire the requested locking mode on the given Vm. If I'm
+        successful, I return True; otherwise, I return False.
+        """
+        logging.debug("Trying to lock vm %s for client" % vm.name)
+        if lock_mode == Q_LOCK_EXCL:
+            logging.debug("Exclusive lock mode selected")
+            if vm.lock.acquire(False):
+                logging.debug("Acquired exclusive lock")
+                # got the lock; need to check for other readers and writers.
+                if not vm.readers and not vm.writers:
+                    logging.debug("No clients and no other writers; we're good")
+                    vm.lockholder = sock
+                    vm.readers.append(sock)
+                    vm.writers.append(sock)
+                    return True
+                else:
+                    logging.debug("clients or writers; releasing lock")
+                    vm.lock.release()
+
+        elif lock_mode == Q_LOCK_WRITE:
+            logging.debug("Write lock selected")
+            if vm.lock.acquire(False):
+                # got the lock; need to check for other writers
+                logging.debug("Write lock acquired")
+                if not vm.writers:
+                    logging.debug("No other writers; we're good")
+                    vm.lockholder = sock
+                    vm.readers.append(sock)
+                    vm.writers.append(sock)
+                    return True
+                else:
+                    logging.debug("Other writers, bail out")
+                    vm.lock.release()
+
+        elif lock_mode == Q_LOCK_NONE:
+            logging.debug("free-for-all selected")
+            if vm.lockholder is None:
+                logging.debug("No one thinks they have exclusive write access, returning True")
+                vm.writers.append(sock)
+                vm.readers.append(sock)
+                return True
+
+        logging.debug("Lock acquisition failed, returning False")
+        return False
+
 class vSPCBackendFile(vSPCBackendMemory):
     def __init__(self):
         vSPCBackendMemory.__init__(self)

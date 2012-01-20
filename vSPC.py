@@ -1600,7 +1600,7 @@ class AdminProtocolClient(Poller):
         finally:
             self.quit()
 
-def do_query(host, port, vm_name=None, lock_mode=Q_LOCK_FFAR):
+def do_query(host, port, vm_name, lock_mode):
     client = AdminProtocolClient(host, port, vm_name, sys.stdin, sys.stdout, lock_mode)
     client.run()
 

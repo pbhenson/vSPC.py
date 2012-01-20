@@ -657,6 +657,12 @@ class vSPCBackendMemory:
             self.port = port
             self.name = name
 
+            self.modification_lock = threading.Lock()
+            self.writers = []
+            self.readers = []
+            self.lockholder = None
+            self.lock = threading.Lock()
+
     def __init__(self):
         self.admin_queue = Queue.Queue()
         self.admin_threads = []

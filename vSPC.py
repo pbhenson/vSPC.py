@@ -832,7 +832,10 @@ class vSPCBackendMemory:
                 if status == Q_OK:
                     pickle.dump(self.get_seed_data(vm.uuid), sockfile)
                     sockfile.flush()
-                    vspc.queue_new_admin_client_connection(sock, vm.uuid)
+                    readonly = False
+                    if vm.lock_mode == Q_LOCK_FFAR:
+                        readonly = True
+                    vspc.queue_new_admin_client_connection(sock, vm.uuid, readonly)
                 elif status == Q_VM_NOTFOUND:
                     pickle.dump(self.format_vm_listing(), sockfile)
                 else: # unknown lock mode, or lock acquisition failed
@@ -1306,20 +1309,21 @@ class vSPC(Poller, VMExtHandler):
         sock = listener.accept()[0]
         self.task_queue.put(lambda: self.new_admin_connection(sock))
 
-    def new_admin_client_connection(self, sock, uuid):
+    def new_admin_client_connection(self, sock, uuid, readonly):
         client = self.Client(sock)
         client.uuid = uuid
 
         vm = self.vms[uuid]
 
-        self.add_reader(client, self.queue_new_client_data)
+        if not readonly:
+            self.add_reader(client, self.queue_new_client_data)
         vm.clients.append(client)
 
         logging.debug('uuid %s new client, %d active clients'
                       % (client.uuid, len(vm.clients)))
 
-    def queue_new_admin_client_connection(self, sock, uuid):
-        self.task_queue.put(lambda: self.new_admin_client_connection(sock, uuid))
+    def queue_new_admin_client_connection(self, sock, uuid, readonly=False):
+        self.task_queue.put(lambda: self.new_admin_client_connection(sock, uuid, readonly))
 
     def collect_orphans(self):
         t = time.time()

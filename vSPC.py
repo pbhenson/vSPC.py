@@ -869,6 +869,8 @@ class vSPCBackendMemory:
     def maybe_unlock_vm(self, vm, sock):
         """
         I determine whether a vm can be unlocked due to a client disconnecting.
+
+        Callers are assumed to hold the modification lock of the vm argument.
         """
         if vm.lockholder is sock:
             vm.lockholder = None
@@ -884,6 +886,8 @@ class vSPCBackendMemory:
         """
         I try to acquire the requested locking mode on the given Vm. If I'm
         successful, I return True; otherwise, I return False.
+
+        Callers are assumed to hold the modification lock of the vm argument.
         """
         logging.debug("Trying to lock vm %s for client" % vm.name)
         if lock_mode == Q_LOCK_EXCL:

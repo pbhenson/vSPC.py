@@ -719,8 +719,9 @@ class vSPCBackendMemory:
 
     def get_seed_data(self, uuid):
         """
-        Return a list of things to give a newly connected client to seed
-        their session with.
+        Return a list of console activity to give a newly connected client,
+        giving them some context (if available) for their newly-created
+        session.
         """
         return []
 

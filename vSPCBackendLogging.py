@@ -56,9 +56,14 @@ class vSPCBackendLogging(vSPCBackendMemory):
 
         # uuid => list of scrollback entries.
         self.scrollback = {}
+        # How many scrollback lines to keep for each VM.
+        self.scrollback_limit = 25
 
     def add_scrollback(self, uuid, msg):
         self.scrollback.setdefault(uuid, []).append(msg)
+        msgs = self.scrollback[uuid]
+        msgs = msgs[len(msgs)-self.scrollback_limit:]
+        self.scrollback[uuid] = msgs
 
     def get_seed_data(self, uuid):
         if uuid in self.scrollback:

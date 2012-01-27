@@ -54,21 +54,21 @@ class vSPCBackendLogging(vSPCBackendMemory):
         # register for SIGHUP, so we know when to reload logfiles.
         signal.signal(signal.SIGHUP, self.handle_sighup)
 
-        # uuid => list of scrollback entries.
+        # uuid => string of scrollback
         self.scrollback = {}
         # How many scrollback lines to keep for each VM.
         self.scrollback_limit = parsed_args.context
 
     def add_scrollback(self, uuid, msg):
-        self.scrollback.setdefault(uuid, []).append(msg)
-        msgs = self.scrollback[uuid]
+        msgs = self.scrollback.setdefault(uuid, "")
+        msgs += msg
         msgs = msgs[len(msgs)-self.scrollback_limit:]
         self.scrollback[uuid] = msgs
 
     def get_seed_data(self, uuid):
         if uuid in self.scrollback:
             return self.scrollback[uuid]
-        return []
+        return ""
 
     def vm_msg_hook(self, uuid, name, msg):
         f = self.file_for_vm(name, uuid)

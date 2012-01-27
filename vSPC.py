@@ -723,7 +723,7 @@ class vSPCBackendMemory:
         giving them some context (if available) for their newly-created
         session.
         """
-        return []
+        return ""
 
     def get_observed_vms(self):
         if not self.observed_vms_loaded:
@@ -1457,7 +1457,7 @@ class AdminProtocolClient(Poller):
             if applied_lock_mode == Q_LOCK_FFAR:
                 self.destination.write("Someone else has an exclusive write lock; operating in read-only mode\n")
             seed_data = unpickler.load()
-            assert isinstance(seed_data, list)
+
             for entry in seed_data:
                 self.destination.write(entry)
 

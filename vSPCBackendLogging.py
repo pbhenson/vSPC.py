@@ -94,7 +94,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
                           help='Directory in which log files are written')
         parser.add_option("-p", "--prefix", default='vmlog', type='string',
                           help="First part of log file names")
-        parser.add_option("--context", type='int', action='store', default=25,
+        parser.add_option("--context", type='int', action='store', default=200,
                           help="Number of VM messages to keep as context for new connections")
         args_list = shlex.split(args)
         (options, args) = parser.parse_args(args_list)

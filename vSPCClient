@@ -1,0 +1,130 @@
+#!/usr/bin/python -u
+
+# Copyright 2012 Kevan A. Carstensen. All Rights Reserved
+#
+# Redistribution and use in source and binary forms, with or without modification, are
+# permitted provided that the following conditions are met:
+#
+#    1. Redistributions of source code must retain the above copyright notice, this list of
+#       conditions and the following disclaimer.
+#
+#    2. Redistributions in binary form must reproduce the above copyright notice, this list
+#       of conditions and the following disclaimer in the documentation and/or other materials
+#       provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY California State Polytechnic University, Pomona.
+# ''AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+# TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> OR CONTRIBUTORS
+# BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+import logging
+import sys
+
+from vSPC import AdminProtocolClient, Q_LOCK_FFAR, Q_LOCK_FFA, Q_LOCK_WRITE, Q_LOCK_EXCL
+
+BASENAME="vSPCClient"
+# Default for --admin-port, the port to hit vSPC-query with
+ADMIN_PORT = 13371
+
+def usage():
+    sys.stderr.write('''\
+%s
+
+Common options:
+%s: [-h|--help] [--admin-port] hostname vm_name
+
+Connect to the admin port (default %d) of a running vSPC server. With no vm, this
+prints a list of VMs known to the server and, if the server is configured to
+open telnet listeners for connected vms, vm to port mappings. If a vm is given,
+this attempts to establish a session with the VM.
+
+--client-lock-mode allows you to specify the locking mode used for the VM by
+the server. The available locking modes are:
+    - exclusive: No other clients may connect to the VM's console at all.
+    - write: No other clients may write to the VM's console, but they may watch
+      the things you do on the console.
+    - free-for-all: Other clients may read and write to the VM.
+    - free-for-all-fallback: Try to use free-for-all, but fallback to readonly
+      mode if another client holds a write lock. This is the default.
+
+If the server cannot satisfy the requested lock, session establishment will fail.
+''' % (BASENAME, BASENAME, ADMIN_PORT))
+
+def do_query(host, port, vm_name, lock_mode):
+    client = AdminProtocolClient(host, port, vm_name, sys.stdin, sys.stdout, lock_mode)
+    client.run()
+
+if __name__ == '__main__':
+    import getopt
+
+    client_lock_mode = "free-for-all-fallback"
+    admin_port = ADMIN_PORT
+    debug = False
+    syslog = True
+
+    try:
+        opts, args = getopt.gnu_getopt(sys.argv[1:], "a:dh", ["client-lock-mode=", "admin-port=",
+                                       "debug", 'stdout', "help"])
+        for o,a in opts:
+            if o in ["--client-lock-mode"]:
+                client_lock_mode = a
+            elif o in ['-d', '--debug']:
+                debug = True
+                syslog = False
+            elif o in ['--stdout']:
+                syslog = False
+            elif o in ['-a, --admin-port']:
+                admin_port = int(a)
+            elif o in ['-h', '--help']:
+                usage()
+                sys.exit(0)
+            else:
+                assert False, 'unhandled option'
+    except getopt.GetoptError, err:
+        print str(err)
+        usage()
+        sys.exit(2)
+
+    logger = logging.getLogger('')
+    logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    if syslog:
+        from logging.handlers import SysLogHandler
+        from logging import Formatter
+        formatter = Formatter(fmt="vSPC.py[%(process)d]: %(message)s")
+        handler = SysLogHandler(address="/dev/log")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
+    if len(args) < 1 or len(args) > 2:
+        print "Expected 1 or 2 arguments, found %d" % len(args)
+        usage()
+        sys.exit(2)
+
+    if client_lock_mode not in ("exclusive", "write", "free-for-all", "free-for-all-fallback"):
+        print "%s isn't a valid lock mode" % client_lock_mode
+        print "valid lock modes are: exclusive, write, free-for-all, and free-for-all-fallback"
+        usage()
+        sys.exit(2)
+    else:
+        if client_lock_mode == "exclusive":
+            lock_mode = Q_LOCK_EXCL
+        elif client_lock_mode == "write":
+            lock_mode = Q_LOCK_WRITE
+        elif client_lock_mode == "free-for-all":
+            lock_mode = Q_LOCK_FFA
+        else:
+            assert client_lock_mode == "free-for-all-fallback"
+            lock_mode = Q_LOCK_FFAR
+
+    vm_name = None
+    if len(args) == 2:
+        vm_name = args[1]
+
+    sys.exit(do_query(args[0], admin_port, vm_name, lock_mode))

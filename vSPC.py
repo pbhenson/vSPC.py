@@ -917,7 +917,7 @@ class vSPCBackendMemory:
                 vm.readers.append(sock)
                 return Q_LOCK_FFA
 
-            if vm.lock_mode is not Q_LOCK_EXCL and lock_mode == Q_LOCK_FFAR:
+            if vm.lock_mode != Q_LOCK_EXCL and lock_mode == Q_LOCK_FFAR:
                 logging.debug("VM has a write lock, adding as read-only")
                 vm.readers.append(sock)
                 return Q_LOCK_FFAR

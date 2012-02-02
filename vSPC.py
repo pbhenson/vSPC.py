@@ -1009,6 +1009,8 @@ class vSPC(Poller, VMExtHandler):
 
         self.proxy_port = proxy_port
         self.admin_port = admin_port
+        if not vm_port_start: # account for falsey things, not just None
+            vm_port_start = None
         self.vm_port_next = vm_port_start
         self.vm_expire_time = vm_expire_time
         self.backend = backend

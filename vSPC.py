@@ -518,7 +518,7 @@ class Poller:
     def add_stream(self, stream):
         # called with self.lock
         self.fds[stream.fileno()] = stream
-        self.fd_mask[stream] = 0
+        self.fd_mask[stream] = select.EPOLLERR | select.EPOLLHUP
         self.epoll.register(stream, self.fd_mask[stream])
 
     def add_reader(self, stream, func):
@@ -577,8 +577,8 @@ class Poller:
             # interrupted syscall
             return False
         for (fileno, event) in events:
-            if event == select.EPOLLIN or event == select.EPOLLERR:
-                # read event
+            if event == select.EPOLLIN or event == select.EPOLLERR or event == select.EPOLLHUP:
+                # read event, or error condition that we should treat like a read event
                 with self.lock:
                     fd = self.fds[fileno]
                     handler = self.read_handlers[fd]

@@ -577,7 +577,7 @@ class Poller:
             # interrupted syscall
             return False
         for (fileno, event) in events:
-            if event == select.EPOLLIN:
+            if event == select.EPOLLIN or event == select.EPOLLERR:
                 # read event
                 with self.lock:
                     fd = self.fds[fileno]

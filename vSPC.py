@@ -579,6 +579,7 @@ class Poller:
                 logging.debug("I was asked to handle an unsupported event (%d) "
                               "for fd %d. I'm removing fd %d" % (event, fileno, fileno))
                 with self.lock:
+                    fd = self.fds[fileno]
                     self.remove_fd(fd)
 
     def run_forever(self):

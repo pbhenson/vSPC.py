@@ -1124,7 +1124,8 @@ class vSPC(Poller, VMExtHandler):
         # logging.debug('new_vm_data %s: %s' % (vt.uuid, repr(s)))
         self.backend.notify_vm_msg(vt.uuid, vt.name, s)
 
-        for cl in self.vms[vt.uuid].clients:
+        clients = self.vms[vt.uuid].clients[:]
+        for cl in clients:
             try:
                 self.send_buffered(cl, s)
             except (EOFError, IOError, socket.error), e:

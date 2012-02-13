@@ -757,7 +757,7 @@ class vSPCBackendMemory:
             if uuid in self.observed_vms: vm = self.observed_vms[uuid]
         if vm is not None:
             with vm.modification_lock:
-                self.maybe_unlock_vm(vm, sock)
+                self.maybe_unlock_vm(vm, sock.fileno())
 
     def notify_vm_del(self, uuid):
         self.observer_queue.put(lambda: self.vm_del(uuid))
@@ -807,7 +807,7 @@ class vSPCBackendMemory:
                    lock_mode in (Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR):
                     status = Q_LOCK_FAILED
                     with vm.modification_lock:
-                        lock_result = self.try_to_lock_vm(vm, sock, lock_mode)
+                        lock_result = self.try_to_lock_vm(vm, sock.fileno(), lock_mode)
                         if lock_result: status = Q_OK
                 elif vm is None:
                     status = Q_VM_NOTFOUND
@@ -852,23 +852,23 @@ class vSPCBackendMemory:
                 return vm
         return None
 
-    def maybe_unlock_vm(self, vm, sock):
+    def maybe_unlock_vm(self, vm, sockno):
         """
         I determine whether a vm can be unlocked due to a client disconnecting.
 
         Callers are assumed to hold the modification lock of the vm argument.
         """
-        if vm.lockholder is sock:
+        if vm.lockholder is sockno:
             vm.lockholder = None
             vm.lock.release()
-        if sock in vm.writers:
-            vm.writers.remove(sock)
-        if sock in vm.readers:
-            vm.readers.remove(sock)
+        if sockno in vm.writers:
+            vm.writers.remove(sockno)
+        if sockno in vm.readers:
+            vm.readers.remove(sockno)
         if not vm.writers:
             vm.lock_mode = None
 
-    def try_to_lock_vm(self, vm, sock, lock_mode):
+    def try_to_lock_vm(self, vm, sockno, lock_mode):
         """
         I try to acquire the requested locking mode on the given Vm. If I'm
         successful, I return True; otherwise, I return False.
@@ -883,10 +883,10 @@ class vSPCBackendMemory:
                 # got the lock; need to check for other readers and writers.
                 if not vm.readers and not vm.writers:
                     logging.debug("No clients and no other writers; we're good")
-                    vm.lockholder = sock
+                    vm.lockholder = sockno
                     vm.lock_mode = lock_mode
-                    vm.readers.append(sock)
-                    vm.writers.append(sock)
+                    vm.readers.append(sockno)
+                    vm.writers.append(sockno)
                     return lock_mode
                 else:
                     logging.debug("clients or writers; releasing lock")
@@ -899,10 +899,10 @@ class vSPCBackendMemory:
                 logging.debug("Write lock acquired")
                 if not vm.writers:
                     logging.debug("No other writers; we're good")
-                    vm.lockholder = sock
+                    vm.lockholder = sockno
                     vm.lock_mode = lock_mode
-                    vm.readers.append(sock)
-                    vm.writers.append(sock)
+                    vm.readers.append(sockno)
+                    vm.writers.append(sockno)
                     return lock_mode
                 else:
                     logging.debug("Other writers, bail out")
@@ -913,13 +913,13 @@ class vSPCBackendMemory:
             if vm.lockholder is None:
                 logging.debug("No one thinks they have exclusive write access, returning True")
                 vm.lock_mode = Q_LOCK_FFA
-                vm.writers.append(sock)
-                vm.readers.append(sock)
+                vm.writers.append(sockno)
+                vm.readers.append(sockno)
                 return Q_LOCK_FFA
 
             if vm.lock_mode != Q_LOCK_EXCL and lock_mode == Q_LOCK_FFAR:
                 logging.debug("VM has a write lock, adding as read-only")
-                vm.readers.append(sock)
+                vm.readers.append(sockno)
                 return Q_LOCK_FFAR
 
         logging.debug("Lock acquisition failed, returning False")

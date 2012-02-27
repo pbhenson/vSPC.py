@@ -1,0 +1,144 @@
+#!/usr/bin/env python
+
+# Copyright 2011 Kevan A. Carstensen. All Rights Reserved
+# Adapted from code written by Zach M. Loafman, copyright 2011 Isilon Systems.
+#
+# Redistribution and use in source and binary forms, with or without modification, are
+# permitted provided that the following conditions are met:
+#
+#    1. Redistributions of source code must retain the above copyright notice, this list of
+#       conditions and the following disclaimer.
+#
+#    2. Redistributions in binary form must reproduce the above copyright notice, this list
+#       of conditions and the following disclaimer in the documentation and/or other materials
+#       provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY California State Polytechnic University, Pomona.
+# ''AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+# TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> OR CONTRIBUTORS
+# BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+import logging
+import os
+import sys
+
+from optparse import OptionParser, OptionValueError
+from vSPC import vSPC, get_backend_type
+
+# Default for --proxy-port, the port to send VMs to.
+PROXY_PORT = 13370
+
+# Default for --admin-port, the port to hit vSPC-query with
+ADMIN_PORT = 13371
+
+# Default for --port-range-start, start of port range to assign VMs.
+# Ports may be reallocated within the range, based on active connections
+# and --expire.
+VM_PORT_START = 50000
+
+# Default for --expire, number of seconds a VM (based on uuid) holds a
+# port number / listener open with no VMware or client connections
+VM_EXPIRE_TIME = 24*3600
+
+def daemonize():
+    '''
+    Daemonize, based on http://code.activestate.com/recipes/278731-creating-a-daemon-the-python-way/
+    '''
+
+    pid = os.fork()
+    if pid:
+        os._exit(0) # Parent exits
+    os.setsid() # Become session leader
+    pid = os.fork() # Re-fork
+    if pid:
+        os._exit(0) # Child exits
+
+    # We are daemonized grandchild, reset some process state
+    os.chdir('/')
+    os.umask(0)
+
+def handle_persist_file(option, opt_str, value, parser):
+    import pipes
+    parser.values.backend_type_name = "File"
+    parser.values.backend_args = "-f %s" % pipes.quote(value)
+
+if __name__=="__main__":
+    parser = OptionParser(description="Start Virtual Serial Port concentrator")
+    parser.add_option("-d", "--debug", action='store_true', default=False,
+                      help="Debug mode (turns up logging and implies --stdout --no-fork)")
+    parser.add_option("-a", "--admin-port", type='int', default=ADMIN_PORT,
+                      help='The port to listen/use for queries (default %s)' % ADMIN_PORT)
+    parser.add_option("-p", "--proxy-port", type='int', default=PROXY_PORT,
+                      help='The proxy port to listen on (default %s)' % PROXY_PORT)
+    parser.add_option("-r", "--port-range-start", type='int', dest='vm_port_start',
+                      help='What port to start port allocations from (default %s)' % VM_PORT_START,
+                      default=VM_PORT_START)
+    parser.add_option("--vm-expire-time", type='int', default=VM_EXPIRE_TIME,
+                      help='How long to wait before expiring a mapping with no connections')
+    parser.add_option("--stdout", action='store_false', dest='syslog', default=True,
+                      help='Log to stdout instead of syslog')
+    parser.add_option("--no-fork", action='store_false', dest='fork', default=True,
+                      help="Don't daemonize")
+    parser.add_option("--backend", dest='backend_type_name', default='Memory',
+                      help="Name of custom backend class")
+    parser.add_option("--backend-args", dest='backend_args', default='',
+                      help='Arguments to custom backend')
+    parser.add_option("-f", "--persist-file", action='callback', callback=handle_persist_file,
+                      help="DBM file prefix to persist mappings to (.dat/.dir may follow")
+    parser.add_option("--ssl", action='store_true', default=False,
+                      help='Start SSL/TLS on connections to the proxy port')
+    parser.add_option("--cert", default=None,
+                      help="The certificate or PEM file to use on the proxy port. Only "
+                           "meaningful with SSL")
+    parser.add_option("--key", default=None,
+                      help="The key, if necessary, to the certificate given by --cert. "
+                           "Only meaningful with --ssl")
+    parser.add_option("--pidfile", default=None,
+                      help="The file to write the server's process ID to")
+    parser.add_option("--no-vm-ports", action='store_false', dest='vm_port_start',
+                      help='Whether to listen for incoming telnet connections to connected VMs.')
+    (options, args) = parser.parse_args()
+
+    logger = logging.getLogger('')
+    logger.setLevel(logging.DEBUG if options.debug else logging.INFO)
+    if options.syslog and not options.debug:
+        from logging.handlers import SysLogHandler
+        from logging import Formatter
+        formatter = Formatter(fmt="vSPC.py[%(process)d]: %(message)s")
+        handler = SysLogHandler(address="/dev/log")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
+    if len(args) > 0:
+        parser.error("Unexpected arguments: %s" % args)
+
+    if options.ssl and not options.cert:
+        parser.error("Must specify certificate in order to use SSL")
+
+    backend = get_backend_type(options.backend_type_name)()
+    backend.setup(options.backend_args)
+
+    if options.fork and not options.debug:
+        daemonize()
+        if options.pidfile is not None:
+            f = open(options.pidfile, "w")
+            f.write("%d" % os.getpid())
+            f.close()
+
+    try:
+        backend.start()
+
+        vSPC(options.proxy_port, options.admin_port, options.vm_port_start, options.vm_expire_time, backend, options.ssl, options.cert, options.key).run()
+    except KeyboardInterrupt:
+        logging.info("Shutdown requested on keyboard, exiting")
+        sys.exit(0)
+    except Exception, e:
+        logging.exception("Top level exception caught")
+        sys.exit(1)

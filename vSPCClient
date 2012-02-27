@@ -1,0 +1,92 @@
+#!/usr/bin/python -u
+
+# Copyright 2012 Kevan A. Carstensen. All Rights Reserved
+#
+# Redistribution and use in source and binary forms, with or without modification, are
+# permitted provided that the following conditions are met:
+#
+#    1. Redistributions of source code must retain the above copyright notice, this list of
+#       conditions and the following disclaimer.
+#
+#    2. Redistributions in binary form must reproduce the above copyright notice, this list
+#       of conditions and the following disclaimer in the documentation and/or other materials
+#       provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY California State Polytechnic University, Pomona.
+# ''AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+# TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> OR CONTRIBUTORS
+# BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+import logging
+import sys
+
+from optparse import OptionParser, OptionValueError
+from vSPC import AdminProtocolClient, Q_LOCK_FFAR, Q_LOCK_FFA, Q_LOCK_WRITE, Q_LOCK_EXCL
+
+# Default for --admin-port, the port to hit vSPC-query with
+ADMIN_PORT = 13371
+
+def do_query(host, port, vm_name, lock_mode):
+    client = AdminProtocolClient(host, port, vm_name, sys.stdin, sys.stdout, lock_mode)
+    client.run()
+
+def check_lock_mode(option, opt_str, value, parser):
+    client_lock_mode = value
+    if client_lock_mode not in ("exclusive", "write", "free-for-all", "free-for-all-fallback"):
+        raise OptionValueError("%s isn't a recognized lock mode" % client_lock_mode)
+    else:
+        if client_lock_mode == "exclusive":
+            parser.values.client_lock_mode = Q_LOCK_EXCL
+        elif client_lock_mode == "write":
+            parser.values.client_lock_mode = Q_LOCK_WRITE
+        elif client_lock_mode == "free-for-all":
+            parser.values.client_lock_mode = Q_LOCK_FFA
+        else:
+            assert client_lock_mode == "free-for-all-fallback"
+            parser.values.client_lock_mode = Q_LOCK_FFAR
+
+if __name__ == '__main__':
+    parser = OptionParser(usage="usage: %prog [options] servername [vm_name]",
+                          description="Connect to the admin port (default %d) of a running vSPC "
+                                      "server. With no vm, this prints a list of VMs known to the "
+                                      "server and, if the server is configured to open telnet "
+                                      "listeners for connected vms, vm to port mappings. "
+                                      "If a vm is given, this attempts to establish a session "
+                                      "with the given VM.")
+    parser.add_option("--client-lock-mode", dest='client_lock_mode', default=Q_LOCK_FFAR,
+                      callback=check_lock_mode, action='callback', type='str', nargs=1,
+                      help="lock mode to request when initiating a connection with a VM")
+    parser.add_option("-a", "--admin-port", type='int', dest='admin_port', default=ADMIN_PORT,
+                      help="port to connect to on the server")
+    parser.add_option("-d", "--debug", action='store_true', default=False,
+                      help="debug mode; print to stdout, don't log to syslog")
+    parser.add_option("--stdout", action='store_false', dest='syslog', default=True,
+                      help="log to stdout instead of syslog")
+
+    (options, args) = parser.parse_args()
+
+    logger = logging.getLogger('')
+    logger.setLevel(logging.DEBUG if options.debug else logging.INFO)
+    if options.syslog and not options.debug:
+        from logging.handlers import SysLogHandler
+        from logging import Formatter
+        formatter = Formatter(fmt="vSPC.py[%(process)d]: %(message)s")
+        handler = SysLogHandler(address="/dev/log")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
+    if len(args) < 1 or len(args) > 2:
+        parser.error("Expected 1 or 2 arguments, found %d" % len(args))
+
+    vm_name = None
+    if len(args) == 2:
+        vm_name = args[1]
+
+    sys.exit(do_query(args[0], options.admin_port, vm_name, options.client_lock_mode))

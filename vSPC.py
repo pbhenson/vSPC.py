@@ -63,21 +63,6 @@ import Queue
 from telnetlib import *
 from telnetlib import IAC,DO,DONT,WILL,WONT,BINARY,ECHO,SGA,SB,SE,NOOPT,theNULL
 
-# Default for --proxy-port, the port to send VMs to.
-PROXY_PORT = 13370
-
-# Default for --admin-port, the port to hit vSPC-query with
-ADMIN_PORT = 13371
-
-# Default for --port-range-start, start of port range to assign VMs.
-# Ports may be reallocated within the range, based on active connections
-# and --expire.
-VM_PORT_START = 50000
-
-# Default for --expire, number of seconds a VM (based on uuid) holds a
-# port number / listener open with no VMware or client connections
-VM_EXPIRE_TIME = 24*3600
-
 # Query protocol
 Q_VERS        = 2
 Q_NAME        = 'name'
@@ -594,6 +579,7 @@ class Poller:
                 logging.debug("I was asked to handle an unsupported event (%d) "
                               "for fd %d. I'm removing fd %d" % (event, fileno, fileno))
                 with self.lock:
+                    fd = self.fds[fileno]
                     self.remove_fd(fd)
 
     def run_forever(self):
@@ -772,7 +758,7 @@ class vSPCBackendMemory:
             if uuid in self.observed_vms: vm = self.observed_vms[uuid]
         if vm is not None:
             with vm.modification_lock:
-                self.maybe_unlock_vm(vm, sock)
+                self.maybe_unlock_vm(vm, sock.fileno())
 
     def notify_vm_del(self, uuid):
         self.observer_queue.put(lambda: self.vm_del(uuid))
@@ -822,7 +808,7 @@ class vSPCBackendMemory:
                    lock_mode in (Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR):
                     status = Q_LOCK_FAILED
                     with vm.modification_lock:
-                        lock_result = self.try_to_lock_vm(vm, sock, lock_mode)
+                        lock_result = self.try_to_lock_vm(vm, sock.fileno(), lock_mode)
                         if lock_result: status = Q_OK
                 elif vm is None:
                     status = Q_VM_NOTFOUND
@@ -867,23 +853,23 @@ class vSPCBackendMemory:
                 return vm
         return None
 
-    def maybe_unlock_vm(self, vm, sock):
+    def maybe_unlock_vm(self, vm, sockno):
         """
         I determine whether a vm can be unlocked due to a client disconnecting.
 
         Callers are assumed to hold the modification lock of the vm argument.
         """
-        if vm.lockholder is sock:
+        if vm.lockholder is sockno:
             vm.lockholder = None
             vm.lock.release()
-        if sock in vm.writers:
-            vm.writers.remove(sock)
-        if sock in vm.readers:
-            vm.readers.remove(sock)
+        if sockno in vm.writers:
+            vm.writers.remove(sockno)
+        if sockno in vm.readers:
+            vm.readers.remove(sockno)
         if not vm.writers:
             vm.lock_mode = None
 
-    def try_to_lock_vm(self, vm, sock, lock_mode):
+    def try_to_lock_vm(self, vm, sockno, lock_mode):
         """
         I try to acquire the requested locking mode on the given Vm. If I'm
         successful, I return True; otherwise, I return False.
@@ -898,10 +884,10 @@ class vSPCBackendMemory:
                 # got the lock; need to check for other readers and writers.
                 if not vm.readers and not vm.writers:
                     logging.debug("No clients and no other writers; we're good")
-                    vm.lockholder = sock
+                    vm.lockholder = sockno
                     vm.lock_mode = lock_mode
-                    vm.readers.append(sock)
-                    vm.writers.append(sock)
+                    vm.readers.append(sockno)
+                    vm.writers.append(sockno)
                     return lock_mode
                 else:
                     logging.debug("clients or writers; releasing lock")
@@ -914,10 +900,10 @@ class vSPCBackendMemory:
                 logging.debug("Write lock acquired")
                 if not vm.writers:
                     logging.debug("No other writers; we're good")
-                    vm.lockholder = sock
+                    vm.lockholder = sockno
                     vm.lock_mode = lock_mode
-                    vm.readers.append(sock)
-                    vm.writers.append(sock)
+                    vm.readers.append(sockno)
+                    vm.writers.append(sockno)
                     return lock_mode
                 else:
                     logging.debug("Other writers, bail out")
@@ -928,13 +914,13 @@ class vSPCBackendMemory:
             if vm.lockholder is None:
                 logging.debug("No one thinks they have exclusive write access, returning True")
                 vm.lock_mode = Q_LOCK_FFA
-                vm.writers.append(sock)
-                vm.readers.append(sock)
+                vm.writers.append(sockno)
+                vm.readers.append(sockno)
                 return Q_LOCK_FFA
 
-            if vm.lock_mode is not Q_LOCK_EXCL and lock_mode == Q_LOCK_FFAR:
+            if vm.lock_mode != Q_LOCK_EXCL and lock_mode == Q_LOCK_FFAR:
                 logging.debug("VM has a write lock, adding as read-only")
-                vm.readers.append(sock)
+                vm.readers.append(sockno)
                 return Q_LOCK_FFAR
 
         logging.debug("Lock acquisition failed, returning False")
@@ -1024,6 +1010,8 @@ class vSPC(Poller, VMExtHandler):
 
         self.proxy_port = proxy_port
         self.admin_port = admin_port
+        if not vm_port_start: # account for falsey things, not just None
+            vm_port_start = None
         self.vm_port_next = vm_port_start
         self.vm_expire_time = vm_expire_time
         self.backend = backend
@@ -1137,7 +1125,8 @@ class vSPC(Poller, VMExtHandler):
         # logging.debug('new_vm_data %s: %s' % (vt.uuid, repr(s)))
         self.backend.notify_vm_msg(vt.uuid, vt.name, s)
 
-        for cl in self.vms[vt.uuid].clients:
+        clients = self.vms[vt.uuid].clients[:]
+        for cl in clients:
             try:
                 self.send_buffered(cl, s)
             except (EOFError, IOError, socket.error), e:
@@ -1310,7 +1299,7 @@ class vSPC(Poller, VMExtHandler):
 
     def new_admin_connection(self, sock):
         self.collect_orphans()
-        backend.notify_query_socket(sock, self)
+        self.backend.notify_query_socket(sock, self)
 
     def queue_new_admin_connection(self, listener):
         sock = listener.accept()[0]
@@ -1606,10 +1595,6 @@ class AdminProtocolClient(Poller):
         finally:
             self.quit()
 
-def do_query(host, port, vm_name, lock_mode):
-    client = AdminProtocolClient(host, port, vm_name, sys.stdin, sys.stdout, lock_mode)
-    client.run()
-
 def get_backend_type(shortname):
     name = "vSPCBackend" + shortname
     if globals().has_key(name):
@@ -1629,268 +1614,3 @@ def get_backend_type(shortname):
             sys.exit(1)
 
     return backend_type
-
-def daemonize():
-    '''
-    Daemonize, based on http://code.activestate.com/recipes/278731-creating-a-daemon-the-python-way/
-    '''
-
-    pid = os.fork()
-    if pid:
-        os._exit(0) # Parent exits
-    os.setsid() # Become session leader
-    pid = os.fork() # Re-fork
-    if pid:
-        os._exit(0) # Child exits
-
-    # We are daemonized grandchild, reset some process state
-    os.chdir('/')
-    os.umask(0)
-
-def usage():
-    sys.stderr.write('''\
-%s (%s)
-
-Common options:
-%s: [-h|--help] [-d|--debug] [-a|--admin-port P] -s|--server|hostname
-
-Query (without --server): Connect to the --admin-port (default %s) on
-  the specified host and return a list of VMs. Output is colon
-  delimited, vm-name:vm-uuid:port.
-
-Server (with --server):
-  Additional options:
-    [-p|--proxy-port P] [-r|--port-range-start P] [--vm-expire-time seconds]
-    [--backend Backend] [--backend-args 'arg string'] [--backend-help]
-    [-f|--persist-file file] [--pidfile file]
-    [--stdout] [--no-fork]
-
-  Start Virtual Serial Port Concentrator. By default, vSPC listens on
-  port %s for VMware virtual serial connections. Each new VM is
-  assigned a listener, starting at port %s. VM to port mappings may be
-  queried using %s without the --server option (e.g. '%s localhost').
-  A standard 'telnet' may then be used to connect to the VM serial port.
-
-  In order to configure a VM to use the vSPC, you must be running ESXi 4.1+.
-  Add the serial port to the VM, then select:
-    (*) Use Network
-      (*) Server
-      Port URI: %s
-      [X] Use Virtual Serial Port Concentrator:
-      vSPC: telnet://%s:%s
-  NOTE: Direction MUST be Server, and Port URI MUST be %s
-
-  Virtual serial ports support TLS/SSL on connections to a concentrator.
-  To use TLS/SSL, configure the serial port as above, except for the
-  vSPC URI field, which should say:
-      vSPC URI: telnets://%s:%s
-  then launch vSPC.py with the --ssl, --cert, and --key (if necessary)
-  options.
-
-  To have the process id of the server written to a file, use the
-  --pidfile argument. This is useful for initscripts and other process
-  management tools.
-
-  %s makes a best effort to keep VM to port number mappings stable,
-  based on the UUID of the connecting VM. Even if a VM disconnects,
-  client connections are maintained in anticipation of the VM
-  reconnecting (e.g. if the VM is rebooting). The UUID<->port mapping
-  is maintained as long as there are either client connections or as
-  long as the VM is connected, and even after this condition is no
-  longer met, the mapping is retained for --vm-expire-time seconds
-  (default %s).
-
-  The backend of %s serves three major purposes: (a) On initial load,
-  all port mappings are retrieved from the backend. The main thread
-  maintains the port mappings after initial load, but the backend is
-  responsible for setting the initial map. (This design was chosen to
-  avoid blocking on the backend when a new VM connects.) (b) The
-  backend serves all admin connections (because it has full knowledge
-  of the mappings), (c) The backend can fire off customizable hooks as
-  VMs come and go, allowing for persistence, or database tracking, or
-  whatever.
-
-  By default, %s uses the "Memory" backend, which really just
-  means that no initial mappings are loaded on startup and all state
-  is retained in memory alone. The other builtin backend is the "File"
-  backend, which can be configured like so:
-    --backend File --backend-args '-f /tmp/vSPC'.
-  As a convenience, this same configuration can be accomplished using
-  the top level parameter -f or --persist-file, i.e. '-f /tmp/vSPC' is
-  synonymous with the previous set of arguments.
-
-  If '--backend Foo' is given but no builtin backend Foo exists, %s
-  tries to import module vSPCBackendFoo, looking for class vSPCBackendFoo.
-  See --backend-help for programming details.
-
-  Explanation of server options:
-    -a|--admin-port: The port to listen/use for queries (default %s)
-    -p|--proxy-port: The proxy port to listen on (default %s)
-    -r|--port-range-start: What port to start port allocations from (default %s)
-    --vm-expire-time: How long to wait before expiring a mapping with no connections
-    -f|--persist-file: DBM file prefix to persist mappings to (.dat/.dir may follow)
-    --backend: Name of custom backend class (see above)
-    --backend-args: Arguments to custom backend
-    --stdout: Log to stdout instead of syslog
-    --ssl: Start SSL/TLS on connections to the proxy port
-    --cert: The certificate or PEM file to use on the proxy port. Only meaningful with --ssl
-    --key: The key, if necessary, to the certificate given by --cert. Only meaningful with --ssl
-    --no-fork: Don't daemonize
-    --pidfile: The file to write the process ID of the server to (no file by default)
-    -d|--debug: Debug mode (turns up logging and implies --stdout --no-fork)
-''' % (BASENAME, __revision__, BASENAME, ADMIN_PORT, PROXY_PORT,
-       VM_PORT_START, BASENAME, BASENAME, BASENAME,
-       socket.gethostname(), PROXY_PORT, BASENAME, socket.gethostname(), PROXY_PORT,
-       BASENAME, VM_EXPIRE_TIME, BASENAME, BASENAME, BASENAME,
-       ADMIN_PORT, PROXY_PORT, VM_PORT_START))
-
-if __name__ == '__main__':
-    import getopt
-
-    proxy_port = PROXY_PORT
-    admin_port = ADMIN_PORT
-    vm_port_start = VM_PORT_START
-    vm_expire_time = VM_EXPIRE_TIME
-    debug = False
-    syslog = True
-    fork = True
-    server_mode = False
-    backend_type_name = 'Memory'
-    backend_args = ''
-    use_ssl = False
-    ssl_cert = None
-    ssl_key = None
-    pidfile = None
-    client_lock_mode = "free-for-all-fallback"
-
-    try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], 'a:f:hdp:r:s',
-                                       ['help', 'debug', 'admin-port=',
-                                        'proxy-port=', 'port-range-start=',
-                                        'server', 'stdout', 'no-fork', 'ssl',
-                                        'vm-expire-time=', "cert=", "key=",
-                                        'backend=', 'backend-args=',
-                                        'backend-help', "no-vm-ports", "client-lock-mode=",
-                                        'persist-file=', 'pidfile='])
-        for o,a in opts:
-            if o in ['-h', '--help']:
-                usage()
-                sys.exit(0)
-            elif o in ['-d', '--debug']:
-                debug = True
-                syslog = False
-                fork = False
-            elif o in ['-a', '--admin-port']:
-                admin_port = int(a)
-            elif o in ['-p', '--proxy-port']:
-                proxy_port = int(a)
-            elif o in ['-r', '--port-range-start']:
-                vm_port_start = int(a)
-            elif o in ['-s', '--server']:
-                server_mode = True
-            elif o in ['--vm-expire-time']:
-                vm_expire_time = int(a)
-            elif o in ['--stdout']:
-                syslog = False
-            elif o in ['--no-fork']:
-                fork = False
-            elif o in ['--backend']:
-                backend_type_name = a
-            elif o in ['--backend-args']:
-                backend_args = a
-            elif o in ['--backend-help']:
-                help(vSPCBackendMemory)
-                sys.exit(0)
-            elif o in ['-f', '--persist-file']:
-                import pipes
-                backend_type_name = 'File'
-                backend_args = '-f %s' % pipes.quote(a)
-            elif o in ['--ssl']:
-                use_ssl = True
-            elif o in ['--cert']:
-                ssl_cert = a
-            elif o in ['--key']:
-                ssl_key = a
-            elif o in ['--pidfile']:
-                pidfile = a
-            elif o in ['--no-vm-ports']:
-                vm_port_start = None
-            elif o in ["--client-lock-mode"]:
-                client_lock_mode = a
-            else:
-                assert False, 'unhandled option'
-    except getopt.GetoptError, err:
-        print str(err)
-        usage()
-        sys.exit(2)
-
-    logger = logging.getLogger('')
-    logger.setLevel(logging.DEBUG if debug else logging.INFO)
-    if syslog:
-        from logging.handlers import SysLogHandler
-        from logging import Formatter
-        formatter = Formatter(fmt="vSPC.py[%(process)d]: %(message)s")
-        handler = SysLogHandler(address="/dev/log")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-    if not server_mode:
-        if len(args) < 1 or len(args) > 2:
-            print "Expected 1 or 2 arguments, found %d" % len(args)
-            usage()
-            sys.exit(2)
-
-        if client_lock_mode not in ("exclusive", "write", "free-for-all", "free-for-all-fallback"):
-            print "%s isn't a valid lock mode" % client_lock_mode
-            print "valid lock modes are: exclusive, write, free-for-all, and free-for-all-fallback"
-            usage()
-            sys.exit(2)
-        else:
-            if client_lock_mode == "exclusive":
-                lock_mode = Q_LOCK_EXCL
-            elif client_lock_mode == "write":
-                lock_mode = Q_LOCK_WRITE
-            elif client_lock_mode == "free-for-all":
-                lock_mode = Q_LOCK_FFA
-            else:
-                assert client_lock_mode == "free-for-all-fallback"
-                lock_mode = Q_LOCK_FFAR
-
-        vm_name = None
-        if len(args) == 2:
-            vm_name = args[1]
-
-        sys.exit(do_query(args[0], admin_port, vm_name, lock_mode))
-
-    # Server mode
-
-    if len(args) > 0:
-        print "Unexpected arguments: %s" % args
-        usage()
-        sys.exit(2)
-
-    if use_ssl and not ssl_cert:
-        print "Must specify certificate in order to use SSL"
-        usage()
-        sys.exit(2)
-
-    backend = get_backend_type(backend_type_name)()
-    backend.setup(backend_args)
-
-    if fork:
-        daemonize()
-        if pidfile is not None:
-            f = open(pidfile, "w")
-            f.write("%d" % os.getpid())
-            f.close()
-
-    try:
-        backend.start()
-
-        vSPC(proxy_port, admin_port, vm_port_start, vm_expire_time, backend, use_ssl, ssl_cert, ssl_key).run()
-    except KeyboardInterrupt:
-        logging.info("Shutdown requested on keyboard, exiting")
-        sys.exit(0)
-    except Exception, e:
-        logging.exception("Top level exception caught")
-        sys.exit(1)

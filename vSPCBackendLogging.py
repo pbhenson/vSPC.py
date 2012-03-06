@@ -92,7 +92,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
         parser.add_option("-l", "--logdir", type='string',
                           action='store', default="/var/log/consoles",
                           help='Directory in which log files are written')
-        parser.add_option("-p", "--prefix", default='vmlog', type='string',
+        parser.add_option("-p", "--prefix", default='', type='string',
                           help="First part of log file names")
         parser.add_option("--context", type='int', action='store', default=200,
                           help="Number of VM messages to keep as context for new connections")

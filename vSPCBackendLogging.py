@@ -115,6 +115,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
     def reload(self):
         for k, f in self.logfiles.iteritems():
             f.close()
+            del(self.logfiles[k])
             self.logfiles[k] = self.file_for_vm(self.vm_names[k], k)
 
     def handle_sighup(self, signum, frame):

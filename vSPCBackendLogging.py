@@ -30,6 +30,7 @@ import signal
 import logging
 import optparse
 import shlex
+import os
 
 __author__    = "Kevan Carstensen"
 __copyright__ = "Copyright (C) 2011 California State Polytechnic University, Pomona"
@@ -106,7 +107,8 @@ class vSPCBackendLogging(vSPCBackendMemory):
                 filename = "%s/%s-%s" % (self.logdir, self.prefix, name)
             else:
                 filename = "%s/%s" % (self.logdir, name)
-            self.logfiles[uuid] = open(filename, "a")
+            fd = os.open(filename, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0600)
+            self.logfiles[uuid] = os.fdopen(fd, "w")
             self.vm_names[uuid] = name
         return self.logfiles[uuid]
 

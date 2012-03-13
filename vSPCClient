@@ -53,7 +53,7 @@ def check_lock_mode(option, opt_str, value, parser):
             parser.values.client_lock_mode = Q_LOCK_FFAR
 
 if __name__ == '__main__':
-    parser = OptionParser(usage="usage: %prog [options] servername [vm_name]",
+    parser = OptionParser(usage="usage: %prog [options] [vm_name]",
                           description="Connect to the admin port of a running vSPC "
                                       "server. With no vm, this prints a list of VMs known to the "
                                       "server and, if the server is configured to open telnet "
@@ -69,6 +69,8 @@ if __name__ == '__main__':
                       help="debug mode; print to stdout, don't log to syslog")
     parser.add_option("--stdout", action='store_false', dest='syslog', default=True,
                       help="log to stdout instead of syslog")
+    parser.add_option("-s", dest='remote_host', default="localhost",
+                      help="vSPC server to connect to (default localhost)")
 
     (options, args) = parser.parse_args()
 
@@ -82,11 +84,11 @@ if __name__ == '__main__':
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
-    if len(args) < 1 or len(args) > 2:
-        parser.error("Expected 1 or 2 arguments, found %d" % len(args))
+    if len(args) > 2:
+        parser.error("Expected 0 or 1 arguments, found %d" % len(args))
 
     vm_name = None
-    if len(args) == 2:
-        vm_name = args[1]
+    if len(args) == 1:
+        vm_name = args[0]
 
-    sys.exit(do_query(args[0], options.admin_port, vm_name, options.client_lock_mode))
+    sys.exit(do_query(options.remote_host, options.admin_port, vm_name, options.client_lock_mode))

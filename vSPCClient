@@ -54,7 +54,7 @@ def check_lock_mode(option, opt_str, value, parser):
 
 if __name__ == '__main__':
     parser = OptionParser(usage="usage: %prog [options] servername [vm_name]",
-                          description="Connect to the admin port (default %d) of a running vSPC "
+                          description="Connect to the admin port of a running vSPC "
                                       "server. With no vm, this prints a list of VMs known to the "
                                       "server and, if the server is configured to open telnet "
                                       "listeners for connected vms, vm to port mappings. "

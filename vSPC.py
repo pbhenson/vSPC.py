@@ -1060,7 +1060,11 @@ class vSPC(Poller, VMExtHandler):
         self.add_reader(vt, self.queue_new_vm_data)
 
     def queue_new_vm_connection(self, listener):
-        sock = listener.accept()[0]
+        try:
+            sock = listener.accept()[0]
+        except ssl.SSLError:
+            return
+
         self.task_queue.put(lambda: self.new_vm_connection(sock))
 
     def new_client_connection(self, sock, vm):

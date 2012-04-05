@@ -1519,6 +1519,8 @@ class AdminProtocolClient(Poller):
     def process_escape_character(self):
         self.restore_terminal()
         ret = ""
+        # make sure the prompt shows up on its own line.
+        self.destination.write("\n")
         while True:
             c = raw_input("vspc> ")
             if c == "quit":

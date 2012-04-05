@@ -1402,7 +1402,7 @@ class AdminProtocolClient(Poller):
         self.admin_port = admin_port
         self.host       = host
         self.vm_name    = vm_name
-        # needed for the selector to work
+        # needed for the poller to work
         assert hasattr(src, "fileno")
         self.command_source = src
         self.destination    = dst

@@ -1522,7 +1522,8 @@ class AdminProtocolClient(Poller):
         # make sure the prompt shows up on its own line.
         self.destination.write("\n")
         while True:
-            c = raw_input("vspc> ")
+            self.destination.write("vspc> ")
+            c = self.command_src.readline().strip()
             if c == "quit":
                 self.quit()
             elif c == "continue":

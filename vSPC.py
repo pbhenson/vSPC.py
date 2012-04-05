@@ -1523,7 +1523,7 @@ class AdminProtocolClient(Poller):
         self.destination.write("\n")
         while True:
             self.destination.write("vspc> ")
-            c = self.command_src.readline().strip()
+            c = self.command_source.readline().strip()
             if c == "quit":
                 self.quit()
             elif c == "continue":

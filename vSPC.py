@@ -1529,7 +1529,8 @@ class AdminProtocolClient(Poller):
                 c = "quit"
             if c == "quit":
                 self.quit()
-            elif c == "continue":
+            # treat enter/return as continue
+            elif c == "continue" or c == "":
                 break
             elif c == "print-escape":
                 ret = CLIENT_ESCAPE_CHAR

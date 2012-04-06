@@ -1586,6 +1586,7 @@ class AdminProtocolClient(Poller):
 
     def quit(self):
         self.restore_terminal()
+        self.destination.write("\n")
         self.vspc_socket.close()
         sys.exit(0)
 

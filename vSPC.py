@@ -1527,10 +1527,10 @@ class AdminProtocolClient(Poller):
             if c == "": # EOF
                 c = "quit"
             c = c.strip()
-            if c == "quit":
+            if c == "quit" or c == "q":
                 self.quit()
             # treat enter/return as continue
-            elif c == "continue" or c == "":
+            elif c == "continue" or c == "" or c == "c":
                 break
             elif c == "print-escape":
                 ret = CLIENT_ESCAPE_CHAR

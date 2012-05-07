@@ -104,9 +104,9 @@ class vSPCBackendLogging(vSPCBackendMemory):
     def file_for_vm(self, name, uuid):
         if uuid not in self.logfiles:
             if self.prefix:
-                filename = "%s/%s-%s" % (self.logdir, self.prefix, name)
+                filename = "%s/%s-%s.log" % (self.logdir, self.prefix, name)
             else:
-                filename = "%s/%s" % (self.logdir, name)
+                filename = "%s/%s.log" % (self.logdir, name)
             fd = os.open(filename, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0600)
             self.logfiles[uuid] = os.fdopen(fd, "w")
             self.vm_names[uuid] = name

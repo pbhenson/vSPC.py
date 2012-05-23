@@ -1548,6 +1548,10 @@ class AdminProtocolClient(Poller):
             sys.stderr.write("Server complained: %s\n" % str(listing))
             return
 
+        assert isinstance(listing, list)
+        # sort vms by name
+        listing.sort(key=lambda x: x[Q_NAME])
+
         for vm in listing:
             out = "%s:%s" % (vm[Q_NAME], vm[Q_UUID])
             if vm[Q_PORT] is not None:

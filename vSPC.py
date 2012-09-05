@@ -46,6 +46,7 @@ __revision__ = "$Id$"
 
 BASENAME='vSPC.py'
 
+import getopt
 import fcntl
 import logging
 import os

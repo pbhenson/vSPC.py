@@ -4,7 +4,7 @@ hold some changes I made to vSPC.py until they get accepted upstream.
 These changes include SSL support for connections between ESX hosts and
 vSPC.py, console activity logging, and some other minor improvements.
 
-== Configuring VMs to connect to the concentrator ==
+## Configuring VMs to connect to the concentrator ##
 
 In order to configure a VM to use the virtual serial port concentrator,
 you must be running ESXi 4.1+. You must also have a software license
@@ -13,12 +13,14 @@ level that allows you to use networked serial ports.
 First, add a networked virtual serial port to the VM. Configure it as
 follows:
 
+```
     (*) Use Network
       (*) Server
       Port URI: vSPC.py
       [X] Use Virtual Serial Port Concentrator:
       vSPC: telnet://hostname:proxy_port
-  NOTE: Direction MUST be Server, and Port URI MUST be %s
+```
+NOTE: Direction MUST be Server, and Port URI MUST be vSPC.py. 
 
 where hostname is the FQDN (or IP address) of the machine running the
 virtual serial port concentrator, and proxy_port is the port that you've
@@ -29,7 +31,7 @@ which should specify telnets instead of telnet. For this to work
 correctly, you'll also need to launch the server with the --ssl, --cert,
 and possibly --key options.
 
-== Running the Concentrator ==
+## Running the Concentrator ##
 
 You run the concentrator through the vSPCServer program. The vSPCServer
 program is configurable with a number of options, documented below and
@@ -82,7 +84,7 @@ If '--backend Foo' is given but no builtin backend Foo exists, %s
 tries to import module vSPCBackendFoo, looking for class vSPCBackendFoo.
 See --backend-help for programming details.
 
-== Authors ==
+## Authors ##
 
     - Zach Loafman (initial implementation)
     - Kevan Carstensen (SSL support, logging backend, lazy client connections to VMs, internal work necessary to support lazy connections to VMs)

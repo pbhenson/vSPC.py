@@ -46,6 +46,7 @@ __revision__ = "$Id$"
 
 BASENAME='vSPC.py'
 
+import getopt
 import fcntl
 import logging
 import os
@@ -969,9 +970,11 @@ class vSPCBackendFile(vSPCBackendMemory):
 
     def vm_hook(self, uuid, name, port):
         self.shelf[uuid] = { P_UUID : uuid, P_NAME : name, P_PORT : port }
+        self.shelf.sync()
 
     def vm_del_hook(self, uuid):
         del self.shelf[uuid]
+        self.shelf.sync()
 
     def load_vms(self):
         vms = {}

@@ -82,4 +82,10 @@ If '--backend Foo' is given but no builtin backend Foo exists, %s
 tries to import module vSPCBackendFoo, looking for class vSPCBackendFoo.
 See --backend-help for programming details.
 
+== Authors ==
+
+    - Zach Loafman (initial implementation)
+    - Kevan Carstensen (SSL support, logging backend, lazy client connections to VMs, internal work necessary to support lazy connections to VMs)
+    - Dave Johnson (fixes for missing getopt modules and missing shelf.sync() calls)
+
 [1] http://sourceforge.net/p/vspcpy/home/Home/

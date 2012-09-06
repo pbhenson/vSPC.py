@@ -60,7 +60,8 @@ disconnects, client connections are maintained in anticipation of the VM
 reconnecting (e.g. if the VM is rebooting). The UUID<->port mapping is
 maintained as long as there are either client connections or as long as
 the VM is connected, and even after this condition is no longer met, the
-mapping is retained for --vm-expire-time seconds (default %s).
+mapping is retained for --vm-expire-time seconds (default 24*3600, or
+one day).
 
 The backend of vSPCServer serves three major purposes: (a) On initial
 load, all port mappings are retrieved from the backend. The main thread
@@ -80,14 +81,14 @@ backend, which can be configured like so: --backend File --backend-args
 accomplished using the top level parameter -f or --persist-file, i.e.
 '-f /tmp/vSPC' is synonymous with the previous set of arguments.
 
-If '--backend Foo' is given but no builtin backend Foo exists, %s
+If '--backend Foo' is given but no builtin backend Foo exists, vSPC.py
 tries to import module vSPCBackendFoo, looking for class vSPCBackendFoo.
 See --backend-help for programming details.
 
 ## Authors ##
 
-    - Zach Loafman (initial implementation)
-    - Kevan Carstensen (SSL support, logging backend, lazy client connections to VMs, internal work necessary to support lazy connections to VMs)
-    - Dave Johnson (fixes for missing getopt modules and missing shelf.sync() calls)
+- Zach Loafman (initial implementation)
+- Kevan Carstensen (SSL support, logging backend, lazy client connections to VMs, internal work necessary to support lazy connections to VMs)
+- Dave Johnson (fixes for missing getopt modules and missing shelf.sync() calls)
 
 [1] http://sourceforge.net/p/vspcpy/home/Home/

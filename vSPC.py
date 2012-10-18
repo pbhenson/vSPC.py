@@ -1092,6 +1092,7 @@ class vSPC(Poller, VMExtHandler):
         else:
             logging.debug('unidentified VM socket closed')
         self.del_all(vt)
+        vt.close()
 
     def new_vm_data(self, vt):
         neg_done = False

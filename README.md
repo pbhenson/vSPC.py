@@ -4,6 +4,15 @@ hold some changes I made to vSPC.py until they get accepted upstream.
 These changes include SSL support for connections between ESX hosts and
 vSPC.py, console activity logging, and some other minor improvements.
 
+## Requirements ##
+
+Python 2.5+ is required. Users have reported problems running vSPC.py on
+Python 2.4.x.
+
+Due to the use of epoll in the server implementation, Linux is required.
+There may be other issues associated with using vSPC.py on other OSs, as
+large parts of vSPC.py were only developed & tested on Linux.
+
 ## Configuring VMs to connect to the concentrator ##
 
 In order to configure a VM to use the virtual serial port concentrator,

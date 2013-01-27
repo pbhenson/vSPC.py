@@ -31,6 +31,7 @@ import logging
 import optparse
 import shlex
 import os
+import string
 
 __author__    = "Kevan Carstensen"
 __copyright__ = "Copyright (C) 2011 California State Polytechnic University, Pomona"
@@ -46,6 +47,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
 
         self.logdir = parsed_args.logdir
         self.prefix = parsed_args.prefix
+        self.mode  = parsed_args.mode
         # uuid => filehandle
         self.logfiles = {}
 
@@ -88,7 +90,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
         # XXX: Annoying; it would be nicer if OptionParser would print
         # out a more verbose message upon encountering unrecognized
         # arguments
-        u = "%prog ...--backend-args='[ [ (-l | --logdir) logdir ] [ (-p | --prefix) prefix ] ]'"
+        u = "%prog ...--backend-args='[ [ (-l | --logdir) logdir ] [ (-p | --prefix) prefix ] [ (-m | --mode) mode ]'"
         parser = optparse.OptionParser(usage=u)
         parser.add_option("-l", "--logdir", type='string',
                           action='store', default="/var/log/consoles",
@@ -97,6 +99,8 @@ class vSPCBackendLogging(vSPCBackendMemory):
                           help="First part of log file names")
         parser.add_option("--context", type='int', action='store', default=200,
                           help="Number of VM messages to keep as context for new connections")
+        parser.add_option("-m", "--mode", default='0600', type='string',
+                          help="Mode for new logs (default 0600)")
         args_list = shlex.split(args)
         (options, args) = parser.parse_args(args_list)
         return options
@@ -107,7 +111,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
                 filename = "%s/%s-%s.log" % (self.logdir, self.prefix, name)
             else:
                 filename = "%s/%s.log" % (self.logdir, name)
-            fd = os.open(filename, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0600)
+            fd = os.open(filename, os.O_WRONLY | os.O_APPEND | os.O_CREAT, string.atoi(self.mode, 8))
             self.logfiles[uuid] = os.fdopen(fd, "w")
             self.vm_names[uuid] = name
         return self.logfiles[uuid]

@@ -44,8 +44,6 @@ __author__ = "Zachary M. Loafman"
 __copyright__ = "Copyright (C) 2011 Isilon Systems LLC."
 __revision__ = "$Id$"
 
-BASENAME='vSPC.py'
-
 import getopt
 import fcntl
 import logging

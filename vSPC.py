@@ -67,30 +67,7 @@ from telnetlib import IAC,DO,DONT,WILL,WONT,BINARY,ECHO,SGA,SB,SE,NOOPT,theNULL
 from lib.poll import Poller, Selector
 from lib.telnet import TelnetServer, VMTelnetServer, VMExtHandler, hexdump
 from lib.backend import vSPCBackendMemory, vSPCBackendFile
-
-# Query protocol
-Q_VERS        = 2
-Q_NAME        = 'name'
-Q_UUID        = 'uuid'
-Q_PORT        = 'port'
-Q_OK          = 'vm_found'
-Q_VM_NOTFOUND = 'vm_not_found'
-# Exclusive write and read access; no other clients have any access to the VM.
-Q_LOCK_EXCL   = "exclusive"
-# Exclusive write access; other clients can watch the session
-Q_LOCK_WRITE  = "write"
-# Nonexclusive write access; other clients may watch and interact with the VM.
-Q_LOCK_FFA    = "free_for_all"
-# Same as FFA, but with a fallback to read access if the VM is locked in
-# nonexclusive mode.
-Q_LOCK_FFAR   = "free_for_all_or_readonly"
-Q_LOCK_BAD    = "lock_invalid"
-Q_LOCK_FAILED = "lock_failed"
-
-# Persistence fields
-P_UUID = 'uuid'
-P_NAME = 'name'
-P_PORT = 'port'
+from lib.admin import Q_VERS, Q_NAME, Q_UUID, Q_PORT, Q_OK, Q_VM_NOTFOUND, Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR, Q_LOCK_BAD, Q_LOCK_FAILED
 
 LISTEN_BACKLOG = 5
 CLIENT_ESCAPE_CHAR = chr(29)

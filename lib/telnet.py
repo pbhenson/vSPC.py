@@ -29,6 +29,8 @@
 # authors and should not be interpreted as representing official policies, either expressed
 # or implied, of <copyright holder>.
 
+BASENAME='vSPC.py'
+
 import logging
 import struct
 import time

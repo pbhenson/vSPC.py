@@ -36,6 +36,8 @@ import sys
 import threading
 import Queue
 
+from admin import Q_VERS, Q_NAME, Q_UUID, Q_PORT, Q_OK, Q_VM_NOTFOUND, Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR, Q_LOCK_BAD, Q_LOCK_FAILED
+
 class vSPCBackendMemory:
     ADMIN_THREADS = 4
     ADMIN_CONN_TIMEOUT = 0.2
@@ -324,6 +326,11 @@ class vSPCBackendMemory:
 
         logging.debug("Lock acquisition failed, returning False")
         return False
+
+# Persistence fields for file backend.
+P_UUID = 'uuid'
+P_NAME = 'name'
+P_PORT = 'port'
 
 class vSPCBackendFile(vSPCBackendMemory):
     def __init__(self):

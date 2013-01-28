@@ -30,7 +30,9 @@ import os
 import sys
 
 from optparse import OptionParser, OptionValueError
-from vSPC import vSPC, get_backend_type
+
+from lib.server import vSPC
+from lib.backend import vSPCBackendMemory, vSPCBackendFile, vSPCBackendLogging
 
 # Default for --proxy-port, the port to send VMs to.
 PROXY_PORT = 13370
@@ -68,6 +70,26 @@ def handle_persist_file(option, opt_str, value, parser):
     import pipes
     parser.values.backend_type_name = "File"
     parser.values.backend_args = "-f %s" % pipes.quote(value)
+
+def get_backend_type(shortname):
+    name = "vSPCBackend" + shortname
+    if globals().has_key(name):
+        backend_type = globals()[name]
+    else:
+        try:
+            module = __import__(name)
+        except ImportError:
+            print "No builtin backend type %s found, no appropriate class " \
+                "file found (looking for %s.py)" % (shortname, name)
+            sys.exit(1)
+
+        try:
+            backend_type = getattr(module, name)
+        except AttributeError:
+            print "Backend module %s loaded, but class %s not found" % (name, name)
+            sys.exit(1)
+
+    return backend_type
 
 if __name__=="__main__":
     parser = OptionParser(description="Start Virtual Serial Port concentrator")

@@ -46,7 +46,7 @@ __author__ = "Zachary M. Loafman"
 __copyright__ = "Copyright (C) 2011 Isilon Systems LLC."
 __revision__ = "$Id$"
 
-from vSPC import vSPCBackendMemory
+from lib.backend import vSPCBackendMemory
 import logging
 
 class vSPCBackendSample(vSPCBackendMemory):

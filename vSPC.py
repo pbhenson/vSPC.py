@@ -64,7 +64,7 @@ from telnetlib import IAC,DO,DONT,WILL,WONT,BINARY,ECHO,SGA,SB,SE,NOOPT,theNULL
 
 from lib.poll import Poller, Selector
 from lib.telnet import TelnetServer, VMTelnetServer, VMExtHandler, hexdump
-from lib.backend import vSPCBackendMemory, vSPCBackendFile
+from lib.backend import vSPCBackendMemory, vSPCBackendFile, vSPCBackendLogging
 from lib.admin import Q_VERS, Q_NAME, Q_UUID, Q_PORT, Q_OK, Q_VM_NOTFOUND, Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR, Q_LOCK_BAD, Q_LOCK_FAILED
 
 LISTEN_BACKLOG = 5

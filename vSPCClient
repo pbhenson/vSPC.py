@@ -28,7 +28,7 @@ import logging
 import sys
 
 from optparse import OptionParser, OptionValueError
-from vSPC import AdminProtocolClient, Q_LOCK_FFAR, Q_LOCK_FFA, Q_LOCK_WRITE, Q_LOCK_EXCL
+from lib.admin import AdminProtocolClient, Q_LOCK_FFAR, Q_LOCK_FFA, Q_LOCK_WRITE, Q_LOCK_EXCL
 
 # Default for --admin-port, the port to hit vSPC-query with
 ADMIN_PORT = 13371

@@ -421,3 +421,79 @@ class VMTelnetServer(TelnetServer):
             logging.debug('VMware command %d (data %s) not handled' \
                               % (ord(subcmd), hexdump(data)))
             self._send_vmware(UNKNOWN_SUBOPTION_RCVD_2 + subcmd)
+
+class VMTelnetProxyClient(TelnetServer):
+    def __init__(self, sock, vm_name, vm_uuid,
+                 server_opts = (BINARY, SGA, VMWARE_EXT),
+                 client_opts = (BINARY, SGA, ECHO)):
+        self.vm_name = vm_name
+        self.vm_uuid = vm_uuid
+
+        TelnetServer.__init__(self, sock, server_opts, client_opts)
+
+    def _send_vmware(self, s):
+        self.sock.sendall(IAC + SB + VMWARE_EXT + s + IAC + SE)
+
+    def _handle_known_options(self, data):
+        logging.debug("client knows VM commands: %s" % map(ord, data))
+
+    def _handle_unknown_option(self, data):
+        logging.debug("client doesn't know VM command %d, dropping" % hexdump(data))
+
+    def _handle_unknown_option_resp(self, data):
+        logging.debug("client doesn't know VM command %s, dropping" % hexdump(data))
+
+    def _handle_get_vm_name(self, data):
+        logging.debug("handling GET_VM_NAME from server")
+
+    def _handle_get_vc_uuid(self, data):
+        logging.debug("handling GET_VM_VC_UUID from proxy")
+
+    def _handle_do_proxy_will(self, data):
+        logging.debug("handling WILL PROXY from proxy")
+
+    def _handle_do_proxy_wont(self, data):
+        logging.debug("handling WONT PROXY from proxy")
+
+    def _send_do_proxy(self, data):
+        logging.debug("would send DO PROXY")
+
+    def _send_vmware_initial(self):
+        self._send_vmware(KNOWN_SUBOPTIONS_1 + \
+                              reduce(lambda s,c: s+c,
+                                     sorted(EXT_SUPPORTED.keys())))
+
+        # expect other end to send us KNOWN_SUBOPTIONS_2
+        self.unacked.append((VMWARE_EXT, KNOWN_SUBOPTIONS_2))
+
+    def _option_callback(self, sock, cmd, opt):
+        if cmd == DO and opt == VMWARE_EXT:
+            self._send_vmware_initial()
+            # Fall through so VMWARE_EXT will get removed from unacked
+        elif cmd == DONT and opt == VMWARE_EXT:
+            # Proxy doesn't want to talk to us anymore.
+            # TODO: Error handling.
+            self.close()
+
+        if not cmd == SE or not self.sbdataq[:1] == VMWARE_EXT:
+            TelnetServer._option_callback(self, sock, cmd, opt)
+            return
+
+        data = self.read_sb_data()
+        subcmd = data[1:2]
+        data = data[2:]
+
+        handled = False
+        if EXT_SUPPORTED.has_key(subcmd):
+            meth = '_handle_%s' % EXT_SUPPORTED[subcmd]
+            if hasattr(self, meth):
+                getattr(self, meth)(data)
+                handled = True
+            if (VMWARE_EXT, subcmd) in self.unacked:
+                self.unacked.remove((VMWARE_EXT, subcmd))
+
+        if not handled:
+            logging.debug('VMware command %d (data %s) not handled' \
+                              % (ord(subcmd), hexdump(data)))
+            self._send_vmware(UNKNOWN_SUBOPTION_RCVD_2 + subcmd)
+

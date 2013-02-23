@@ -44,7 +44,37 @@ class FakeVMClient(Poller):
         if not neg_done:
             return
 
-        print "reading data from client"
+        s = None
+        try:
+            s = server.read_very_lazy()
+        except (EOFError, IOError, socket.error):
+            self.quit()
+
+        if not s:
+            # Could be option data, or something else that gets eaten by
+            # a lower level layer.
+            return
+
+        while s:
+            c = s[:100]
+            s = s[100:]
+            self.destination.write(c)
+
+    def new_client_data(self, client):
+        data = client.read()
+        self.send_buffered(self.tc, data)
+
+    def send_buffered(self, conn, data):
+        if conn.send_buffered(data):
+            self.add_writer(conn, self.send_buffered)
+        else:
+            self.del_writer(conn)
+
+    def prepare_terminal(self):
+        (oldterm, oldflags) = prepare_terminal(self.command_src)
+
+    def restore_terminal(self):
+        restore_terminal(self.command_src, self.oldterm, self.oldflags)
 
     def quit(self):
         self.tc.close()

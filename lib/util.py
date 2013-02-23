@@ -1,5 +1,9 @@
 # lib/util.py -- utility functions & classes
 
+import fcntl
+import os
+import termios
+
 def prepare_terminal(fd):
     """
     Prepare a terminal for interactive operation. Take a file

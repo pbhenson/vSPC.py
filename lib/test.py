@@ -31,6 +31,7 @@ class FakeVMClient(Poller):
         self.tc = VMTelnetProxyClient(s, self.vm_name, self.vm_uuid)
 
         self.add_reader(self.tc, self.new_proxy_data)
+        self.add_reader(self.command_src, self.new_client_data)
         self.run_forever()
 
     def new_proxy_data(self, server):

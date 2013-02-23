@@ -41,6 +41,7 @@ from telnetlib import BINARY, ECHO, SGA
 
 from telnet import TelnetServer
 from poll import Poller
+from util import prepare_terminal, restore_terminal
 
 # Query protocol
 Q_VERS        = 2
@@ -226,34 +227,12 @@ class AdminProtocolClient(Poller):
             print out
 
     def prepare_terminal(self):
-        fd = self.command_source
-        self.oldterm = termios.tcgetattr(fd)
-        newattr = self.oldterm[:]
-        # this is essentially cfmakeraw
-
-        # input modes
-        newattr[0] = newattr[0] & ~(termios.IGNBRK | termios.BRKINT | \
-                                    termios.PARMRK | termios.ISTRIP | \
-                                    termios.IGNCR | termios.ICRNL | \
-                                    termios.IXON)
-        # output modes
-        newattr[1] = newattr[1] & ~termios.OPOST
-        # local modes
-        newattr[3] = newattr[3] & ~(termios.ECHO | termios.ECHONL | \
-                                    termios.ICANON | termios.IEXTEN | termios.ISIG)
-        # special characters
-        newattr[2] = newattr[2] & ~(termios.CSIZE | termios.PARENB)
-        newattr[2] = newattr[2] | termios.CS8
-
-        termios.tcsetattr(fd, termios.TCSANOW, newattr)
-
-        self.oldflags = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, self.oldflags | os.O_NONBLOCK)
+        (oldterm, oldflags) = prepare_terminal(self.command_source)
+        self.oldterm = oldterm
+        self.oldflags = oldflags
 
     def restore_terminal(self):
-        fd = self.command_source
-        termios.tcsetattr(fd, termios.TCSAFLUSH, self.oldterm)
-        fcntl.fcntl(fd, fcntl.F_SETFL, self.oldflags)
+        restore_terminal(self.command_source, self.oldterm, self.oldflags)
 
     def quit(self):
         self.restore_terminal()

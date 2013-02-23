@@ -3,6 +3,7 @@
 # project.
 
 import socket
+import sys
 import time
 
 from poll import Poller
@@ -35,9 +36,15 @@ class FakeVMClient(Poller):
     def new_proxy_data(self, server):
         print "in new proxy data"
         neg_done = False
-        neg_done = server.negotiation_done()
-
+        try:
+            neg_done = server.negotiation_done()
+        except (EOFError, IOError, socket.error):
+            self.quit()
         if not neg_done:
             return
 
         print "reading data from client"
+
+    def quit(self):
+        self.tc.close()
+        sys.exit(0)

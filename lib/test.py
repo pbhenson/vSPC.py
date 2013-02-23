@@ -37,7 +37,6 @@ class FakeVMClient(Poller):
         self.run_forever()
 
     def new_proxy_data(self, server):
-        print "in new proxy data"
         neg_done = False
         try:
             neg_done = server.negotiation_done()

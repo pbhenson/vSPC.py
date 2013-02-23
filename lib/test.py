@@ -8,6 +8,7 @@ import time
 
 from poll import Poller
 from telnet import VMTelnetProxyClient
+from util import prepare_terminal, restore_terminal
 
 class FakeVMClient(Poller):
     def __init__(self, src, dst, vm_name, vm_uuid):
@@ -30,6 +31,7 @@ class FakeVMClient(Poller):
         # - Establish telnet client connection to vSPC server.
         self.tc = VMTelnetProxyClient(s, self.vm_name, self.vm_uuid)
 
+        self.prepare_terminal()
         self.add_reader(self.tc, self.new_proxy_data)
         self.add_reader(self.command_src, self.new_client_data)
         self.run_forever()
@@ -77,5 +79,6 @@ class FakeVMClient(Poller):
         restore_terminal(self.command_src, self.oldterm, self.oldflags)
 
     def quit(self):
+        self.restore_terminal()
         self.tc.close()
         sys.exit(0)

@@ -444,10 +444,10 @@ class VMTelnetProxyClient(TelnetServer):
         logging.debug("client doesn't know VM command %s, dropping" % hexdump(data))
 
     def _handle_get_vm_name(self, data):
-        logging.debug("handling GET_VM_NAME from server")
+        self._send_vmware(VM_NAME + self.vm_name)
 
     def _handle_get_vc_uuid(self, data):
-        logging.debug("handling GET_VM_VC_UUID from proxy")
+        self._send_vmware(VM_VC_UUID + self.vm_uuid)
 
     def _handle_do_proxy_will(self, data):
         logging.debug("handling WILL PROXY from proxy")

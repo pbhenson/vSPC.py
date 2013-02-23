@@ -450,19 +450,27 @@ class VMTelnetProxyClient(TelnetServer):
         self._send_vmware(VM_VC_UUID + self.vm_uuid)
 
     def _handle_do_proxy_will(self, data):
-        logging.debug("handling WILL PROXY from proxy")
+        logging.debug("proxy will handle proxy request for vm %s (%s)" % (self.vm_name, self.vm_uuid))
 
     def _handle_do_proxy_wont(self, data):
-        logging.debug("handling WONT PROXY from proxy")
+        logging.debug("proxy won't handle proxy request for vm %s (%s)" % (self.vm_name, self.vm_uuid))
+        # XXX: Consider more robust error handling here?
+        self.close()
 
-    def _send_do_proxy(self, data):
-        logging.debug("would send DO PROXY")
+    def _send_do_proxy(self):
+        # the server-side part of this only handles server proxy
+        # requests, and requires that serviceURI be vSPC.py, so we need
+        # to send 'S' and 'vSPC.py'.
+        self._send_vmware(DO_PROXY + 'S' + 'vSPC.py')
 
     def _send_vmware_initial(self):
+        # Send options
         self._send_vmware(KNOWN_SUBOPTIONS_1 + \
                               reduce(lambda s,c: s+c,
                                      sorted(EXT_SUPPORTED.keys())))
 
+        # Send proxy request
+        self._send_do_proxy()
         # expect other end to send us KNOWN_SUBOPTIONS_2
         self.unacked.append((VMWARE_EXT, KNOWN_SUBOPTIONS_2))
 

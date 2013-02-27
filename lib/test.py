@@ -80,6 +80,9 @@ class FakeVMClient(Poller):
     def prepare_terminal(self):
         (oldterm, oldflags) = prepare_terminal(self.command_src)
 
+        self.oldterm    = oldterm
+        self.oldflags   = oldflags
+
     def restore_terminal(self):
         restore_terminal(self.command_src, self.oldterm, self.oldflags)
 

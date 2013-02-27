@@ -25,11 +25,8 @@ class FakeVMClient(Poller):
         Connect to vSPC instance on hostname:port, register as a VM,
         then prepare to relay traffic.
         """
-        # steps:
-        # - Establish socket connection to VM server
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((hostname, port))
-        # - Establish telnet client connection to vSPC server.
         self.tc = VMTelnetProxyClient(s, self.vm_name, self.vm_uuid)
 
         self.prepare_terminal()

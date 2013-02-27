@@ -184,6 +184,8 @@ class AdminProtocolClient(Poller):
             s = s[100:]
             self.destination.write(c)
 
+        self.destination.flush()
+
     def process_escape_character(self):
         self.restore_terminal()
         ret = ""

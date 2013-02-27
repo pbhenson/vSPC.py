@@ -38,3 +38,9 @@ def prepare_terminal(fd):
 def restore_terminal(fd, oldterm, oldflags):
     termios.tcsetattr(fd, termios.TCSAFLUSH, oldterm)
     fcntl.fcntl(fd, fcntl.F_SETFL, oldflags)
+
+def string_dump(s):
+    """
+    Translate a string into ASCII character codes & split with spaces.
+    """
+    return " ".join(map(lambda x: str(ord(x)), list(s)))

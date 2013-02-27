@@ -1,5 +1,10 @@
 #!/usr/bin/python
 
+import sys
+import logging
+
+from lib.test import FakeVMClient
+
 # Copyright 2013 Kevan A. Carstensen <kevan@isnotajoke.com>. All Rights Reserved
 #
 # Redistribution and use in source and binary forms, with or without modification, are
@@ -41,4 +46,11 @@ if __name__ == '__main__':
         parser.error("Expected 2 arguments, found %d" % len(args))
 
     vspc_host = args[0]
-    vspc_port = args[1]
+    vspc_port = int(args[1])
+
+    logger = logging.getLogger('')
+
+    logger.setLevel(logging.DEBUG if options.debug else logging.INFO)
+
+    fvm = FakeVMClient(sys.stdin, sys.stdout, options.vm_name, options.vm_uid)
+    fvm.connect(vspc_host, vspc_port)

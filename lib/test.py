@@ -63,6 +63,8 @@ class FakeVMClient(Poller):
             s = s[100:]
             self.destination.write(c)
 
+        self.destination.flush()
+
     def new_client_data(self, client):
         data = client.read()
         logging.debug("got client data %s, sending to proxy" % string_dump(data))

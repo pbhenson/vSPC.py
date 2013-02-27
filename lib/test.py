@@ -2,13 +2,14 @@
 # lib/test.py -- functionality that's useful for testing parts of the
 # project.
 
+import logging
 import socket
 import sys
 import time
 
 from poll import Poller
 from telnet import VMTelnetProxyClient
-from util import prepare_terminal, restore_terminal
+from util import prepare_terminal, restore_terminal, string_dump
 
 class FakeVMClient(Poller):
     def __init__(self, src, dst, vm_name, vm_uuid):
@@ -37,12 +38,14 @@ class FakeVMClient(Poller):
         self.run_forever()
 
     def new_proxy_data(self, server):
+        logging.debug("got new proxy data, processing")
         neg_done = False
         try:
             neg_done = server.negotiation_done()
         except (EOFError, IOError, socket.error):
             self.quit()
         if not neg_done:
+            logging.debug("negotiation not yet done, skipping proxy data")
             return
 
         s = None
@@ -50,6 +53,8 @@ class FakeVMClient(Poller):
             s = server.read_very_lazy()
         except (EOFError, IOError, socket.error):
             self.quit()
+
+        logging.debug("got data from proxy: %s\n" % string_dump(s))
 
         if not s:
             # Could be option data, or something else that gets eaten by
@@ -63,9 +68,11 @@ class FakeVMClient(Poller):
 
     def new_client_data(self, client):
         data = client.read()
+        logging.debug("got client data %s, sending to proxy" % string_dump(data))
         self.send_buffered(self.tc, data)
 
-    def send_buffered(self, conn, data):
+    def send_buffered(self, conn, data = ''):
+        logging.debug("sending data to proxy: %s" % string_dump(data))
         if conn.send_buffered(data):
             self.add_writer(conn, self.send_buffered)
         else:

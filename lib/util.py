@@ -7,9 +7,6 @@ import termios
 def build_flags_ssh(oldterm):
     """
     Adapted from enter_raw_mode in sshtty.c in OpenSSH
-
-    Maybe SSH's magical quality (or the fact that it works at all with
-    my terminal emulator) will make my program work too.
     """
     oldterm[0] |= termios.IGNPAR
     oldterm[0] |= termios.ICRNL
@@ -23,30 +20,6 @@ def build_flags_ssh(oldterm):
 
     oldterm[6][termios.VMIN] = 1
     oldterm[6][termios.VTIME] = 0
-
-    return oldterm
-
-def build_flags_cfmakeraw(oldterm):
-    """
-    Build termios settings based on our implementation of the cfmakeraw
-    function.
-    """
-    # this is essentially cfmakeraw
-
-    # input modes
-    oldterm[0] = oldterm[0] & ~(termios.IGNBRK | termios.BRKINT | \
-                                termios.PARMRK | termios.ISTRIP | \
-                                termios.IGNCR | termios.ICRNL | \
-                                termios.IXON)
-    # output modes
-    oldterm[1] = oldterm[1] & ~termios.OPOST
-
-    # local modes
-    oldterm[3] = oldterm[3] & ~(termios.ECHO | termios.ECHONL | \
-                                termios.ICANON | termios.IEXTEN | termios.ISIG)
-    # special characters
-    oldterm[2] = oldterm[2] & ~(termios.CSIZE | termios.PARENB)
-    oldterm[2] = oldterm[2] | termios.CS8
 
     return oldterm
 

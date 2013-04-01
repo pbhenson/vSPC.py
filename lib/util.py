@@ -21,8 +21,6 @@ def build_flags_ssh(oldterm):
                     termios.ECHOE | termios.ECHOK | termios.ECHONL)
     oldterm[3] &= ~termios.IEXTEN
 
-    oldterm[1] &= ~termios.OPOST
-
     oldterm[6][termios.VMIN] = 1
     oldterm[6][termios.VTIME] = 0
 

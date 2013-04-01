@@ -12,8 +12,9 @@ def build_flags_ssh(oldterm):
     my terminal emulator) will make my program work too.
     """
     oldterm[0] |= termios.IGNPAR
+    oldterm[0] |= termios.ICRNL
     oldterm[0] &= ~(termios.ISTRIP | termios.INLCR | termios.IGNCR |\
-                    termios.ICRNL | termios.IXN | termios.IXANY |\
+                    termios.IXON | termios.IXANY |\
                     termios.IXOFF | termios.IUCLC)
 
     oldterm[3] &= ~(termios.ISIG | termios.ICANON | termios.ECHO |\
@@ -60,7 +61,7 @@ def prepare_terminal(fd):
     oldterm = termios.tcgetattr(fd.fileno())
     newattr = oldterm[:]
 
-    newattr = build_flags_cfmakeraw(newattr)
+    newattr = build_flags_ssh(newattr)
 
     termios.tcsetattr(fd.fileno(), termios.TCSANOW, newattr)
 

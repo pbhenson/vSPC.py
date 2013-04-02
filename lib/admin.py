@@ -78,7 +78,7 @@ class AdminProtocolClient(Poller):
 
     class Client(TelnetServer):
         def __init__(self, sock,
-                     server_opts = (BINARY, SGA, ECHO),
+                     server_opts = (BINARY, SGA),
                      client_opts = (BINARY, SGA)):
             TelnetServer.__init__(self, sock, server_opts, client_opts)
             self.uuid = None

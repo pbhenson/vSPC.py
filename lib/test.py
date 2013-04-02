@@ -5,11 +5,12 @@
 import logging
 import socket
 import sys
+import termios
 import time
 
 from poll import Poller
 from telnet import VMTelnetProxyClient
-from util import prepare_terminal, restore_terminal, string_dump
+from util import prepare_terminal_with_flags, restore_terminal, string_dump, build_flags_ssh
 
 class FakeVMClient(Poller):
     def __init__(self, src, dst, vm_name, vm_uuid):
@@ -78,7 +79,12 @@ class FakeVMClient(Poller):
             self.del_writer(conn)
 
     def prepare_terminal(self):
-        (oldterm, oldflags) = prepare_terminal(self.command_src)
+        def flag_builder(newattr):
+            newattr = build_flags_ssh(newattr)
+            newattr[3] |= termios.ECHO
+            return newattr
+
+        (oldterm, oldflags) = prepare_terminal_with_flags(self.command_src, flag_builder)
 
         self.oldterm    = oldterm
         self.oldflags   = oldflags

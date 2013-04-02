@@ -24,6 +24,9 @@ def build_flags_ssh(oldterm):
     return oldterm
 
 def prepare_terminal(fd):
+    return prepare_terminal_with_flags(fd, build_flags_ssh)
+
+def prepare_terminal_with_flags(fd, flag_builder):
     """
     Prepare a terminal for interactive operation. Take a file
     descriptor-like object as an argument, return the original terminal
@@ -32,7 +35,7 @@ def prepare_terminal(fd):
     oldterm = termios.tcgetattr(fd.fileno())
     newattr = oldterm[:]
 
-    newattr = build_flags_ssh(newattr)
+    newattr = flag_builder(newattr)
 
     termios.tcsetattr(fd.fileno(), termios.TCSANOW, newattr)
 

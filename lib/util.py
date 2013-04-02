@@ -11,7 +11,7 @@ def build_flags_ssh(oldterm):
     oldterm[0] |= termios.IGNPAR
     oldterm[0] |= termios.ICRNL
     oldterm[0] &= ~(termios.ISTRIP | termios.INLCR | termios.IGNCR |\
-                    termios.IXON | termios.IXANY |\ termios.IXOFF |
+                    termios.IXON | termios.IXANY | termios.IXOFF |\
                     termios.IUCLC)
 
     oldterm[3] &= ~(termios.ISIG | termios.ICANON | termios.ECHO |\

@@ -2,6 +2,11 @@
 
 import sys
 import logging
+import os
+
+# add top-level installation to path so imports work
+path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(path)
 
 from lib.test import FakeVMClient
 

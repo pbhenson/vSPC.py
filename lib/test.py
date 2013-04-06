@@ -82,7 +82,29 @@ class FakeVMClient(Poller):
         self.send_buffered(self.tc, data)
 
     def process_escape_character(self):
-        return ""
+        self.restore_terminal()
+        ret = ""
+        self.destination.write("\n")
+        while True:
+            self.destination.write("vm> ")
+            c = self.command_src.readline()
+            if c == "":
+                c = "quit"
+            c = c.strip()
+            if c == "quit" or c == "q":
+                self.quit()
+            elif c == "continue" or c == "" or c == "c":
+                break
+            elif c == "print-escape":
+                ret = CLIENT_ESCAPE_CHAR
+                break
+            else:
+                help = ("quit:          terminate the VM\n"
+                        "continue:      exit this menu\n"
+                        "print-escape:  send the escape sequence to the client\n")
+                self.destination.write(help)
+        self.prepare_terminal()
+        return ret
 
     def send_buffered(self, conn, data = ''):
         logging.debug("sending data to proxy: %s" % string_dump(data))

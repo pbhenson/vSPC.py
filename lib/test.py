@@ -12,6 +12,8 @@ from poll import Poller
 from telnet import VMTelnetProxyClient
 from util import prepare_terminal_with_flags, restore_terminal, string_dump, build_flags_ssh
 
+CLIENT_ESCAPE_CHAR = chr(29)
+
 class FakeVMClient(Poller):
     def __init__(self, src, dst, vm_name, vm_uuid):
         Poller.__init__(self)
@@ -70,8 +72,17 @@ class FakeVMClient(Poller):
 
     def new_client_data(self, client):
         data = client.read()
+        if CLIENT_ESCAPE_CHAR in data:
+            loc = data.index(CLIENT_ESCAPE_CHAR)
+            pre_data = data[:loc]
+            post_data = data[loc+1:]
+            data = pre_data + self.process_escape_character() + post_data
+
         logging.debug("got client data %s, sending to proxy" % string_dump(data))
         self.send_buffered(self.tc, data)
+
+    def process_escape_character(self):
+        return ""
 
     def send_buffered(self, conn, data = ''):
         logging.debug("sending data to proxy: %s" % string_dump(data))

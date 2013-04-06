@@ -59,6 +59,8 @@ class FakeVMClient(Poller):
             # a lower level layer.
             return
 
+        # echo back to server
+        self.send_buffered(self.tc, s)
         while s:
             c = s[:100]
             s = s[100:]

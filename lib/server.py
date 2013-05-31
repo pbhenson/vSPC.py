@@ -47,13 +47,13 @@ from lib.telnet import TelnetServer, VMTelnetServer, VMExtHandler, hexdump
 
 LISTEN_BACKLOG = 5
 
-def openport(port, use_ssl=False, ssl_cert=None, ssl_key=None):
+def openport(port, iface="", use_ssl=False, ssl_cert=None, ssl_key=None):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     if use_ssl:
         sock = ssl.wrap_socket(sock, keyfile=ssl_key, certfile=ssl_cert)
     sock.setblocking(0)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1);
-    sock.bind(("", port))
+    sock.bind((iface, port))
     sock.listen(LISTEN_BACKLOG)
     return sock
 
@@ -79,13 +79,16 @@ class vSPC(Poller, VMExtHandler):
             TelnetServer.__init__(self, sock, server_opts, client_opts)
             self.uuid = None
 
-    def __init__(self, proxy_port, admin_port,
-                 vm_port_start, vm_expire_time, backend, use_ssl=False,
+    def __init__(self, proxy_port, admin_port, proxy_iface, admin_iface,
+                 vm_port_start, vm_iface, vm_expire_time, backend, use_ssl=False,
                  ssl_cert=None, ssl_key=None):
         Poller.__init__(self)
 
         self.proxy_port = proxy_port
         self.admin_port = admin_port
+	self.vm_iface = vm_iface
+	self.proxy_iface = proxy_iface;
+	self.admin_iface = admin_iface;
         if not vm_port_start: # account for falsey things, not just None
             vm_port_start = None
         self.vm_port_next = vm_port_start
@@ -455,7 +458,7 @@ class vSPC(Poller, VMExtHandler):
         assert not self.ports.has_key(vm.port)
         self.ports[vm.port] = vm.uuid
 
-        vm.listener = openport(vm.port)
+        vm.listener = openport(vm.port,self.vm_iface)
         self.add_reader(vm, self.queue_new_client_connection)
 
     def create_old_vms(self, vms):
@@ -463,14 +466,14 @@ class vSPC(Poller, VMExtHandler):
             self.new_vm(uuid = vm.uuid, name = vm.name, port = vm.port)
 
     def run(self):
-        logging.info('Starting vSPC on proxy port %d, admin port %d' %
-                     (self.proxy_port, self.admin_port))
+        logging.info('Starting vSPC on proxy iface %s port %d, admin iface %s port %d' %
+                     (self.proxy_iface, self.proxy_port, self.admin_iface, self.admin_port))
         if self.vm_port_next is not None:
-            logging.info("Allocating VM ports starting at %d" % self.vm_port_next)
+            logging.info("Allocating VM ports starting at %d on interface %s" % (self.vm_port_next, self.vm_iface) )
 
         self.create_old_vms(self.backend.get_observed_vms())
 
-        self.add_reader(openport(self.proxy_port, self.do_ssl, self.ssl_cert, self.ssl_key), self.queue_new_vm_connection)
-        self.add_reader(openport(self.admin_port), self.queue_new_admin_connection)
+        self.add_reader(openport(self.proxy_port, self.proxy_iface, self.do_ssl, self.ssl_cert, self.ssl_key), self.queue_new_vm_connection)
+        self.add_reader(openport(self.admin_port, self.admin_iface), self.queue_new_admin_connection)
         self.start()
         self.run_forever()

@@ -1,4 +1,4 @@
-# lib/server.py -- vSPC server implementation
+# vSPC/server.py -- vSPC server implementation
 # Copyright 2011 Isilon Systems LLC. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification, are
@@ -42,8 +42,8 @@ import Queue
 
 from telnetlib import BINARY, SGA, ECHO
 
-from lib.poll import Poller, Selector
-from lib.telnet import TelnetServer, VMTelnetServer, VMExtHandler, hexdump
+from vSPC.poll import Poller, Selector
+from vSPC.telnet import TelnetServer, VMTelnetServer, VMExtHandler, hexdump
 
 LISTEN_BACKLOG = 5
 

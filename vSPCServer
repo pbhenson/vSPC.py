@@ -31,8 +31,8 @@ import sys
 
 from optparse import OptionParser, OptionValueError
 
-from lib.server import vSPC
-from lib.backend import vSPCBackendMemory, vSPCBackendFile, vSPCBackendLogging
+from vSPC.server import vSPC
+from vSPC.backend import vSPCBackendMemory, vSPCBackendFile, vSPCBackendLogging
 
 # Default for --proxy-port, the port to send VMs to.
 PROXY_PORT = 13370

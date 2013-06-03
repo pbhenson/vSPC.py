@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# lib/test.py -- functionality that's useful for testing parts of the
+# vSPC/test.py -- functionality that's useful for testing parts of the
 # project.
 
 import logging

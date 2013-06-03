@@ -1,4 +1,4 @@
-# lib/util.py -- utility functions & classes
+# vSPC/util.py -- utility functions & classes
 
 import fcntl
 import os

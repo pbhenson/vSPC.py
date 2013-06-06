@@ -1,4 +1,4 @@
-# lib/poll.py -- poller and selector objects.
+# vSPC/poll.py -- poller and selector objects.
 # Copyright 2011 Isilon Systems LLC. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification, are

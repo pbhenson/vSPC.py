@@ -1,4 +1,4 @@
-# lib/telnet.py -- telnet code.
+# vSPC/telnet.py -- telnet code.
 
 # Copyright 2011 Isilon Systems LLC. All rights reserved.
 #

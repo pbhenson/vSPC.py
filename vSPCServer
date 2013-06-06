@@ -31,19 +31,28 @@ import sys
 
 from optparse import OptionParser, OptionValueError
 
-from lib.server import vSPC
-from lib.backend import vSPCBackendMemory, vSPCBackendFile, vSPCBackendLogging
+from vSPC.server import vSPC
+from vSPC.backend import vSPCBackendMemory, vSPCBackendFile, vSPCBackendLogging
 
 # Default for --proxy-port, the port to send VMs to.
 PROXY_PORT = 13370
 
+# Default for --proxy-iface, the interface to send VMs to.
+PROXY_IFACE = "0.0.0.0"
+
 # Default for --admin-port, the port to hit vSPC-query with
 ADMIN_PORT = 13371
+
+# Default for --admin-iface, the interface to hit vSPC-query with
+ADMIN_IFACE = "127.0.0.1"
 
 # Default for --port-range-start, start of port range to assign VMs.
 # Ports may be reallocated within the range, based on active connections
 # and --expire.
 VM_PORT_START = 50000
+
+# Default listen interface for VMs
+VM_IFACE = "127.0.0.1"
 
 # Default for --expire, number of seconds a VM (based on uuid) holds a
 # port number / listener open with no VMware or client connections
@@ -99,9 +108,15 @@ if __name__=="__main__":
                       help='The port to listen/use for queries (default %s)' % ADMIN_PORT)
     parser.add_option("-p", "--proxy-port", type='int', default=PROXY_PORT,
                       help='The proxy port to listen on (default %s)' % PROXY_PORT)
+    parser.add_option("--proxy-iface", type='string', default=PROXY_IFACE,
+                      help='The proxy interface to listen on (default %s)' % PROXY_IFACE)
+    parser.add_option("--admin-iface", type='string', default=ADMIN_IFACE,
+                      help='The interface to listen/use for queries (default %s)' % ADMIN_IFACE)
     parser.add_option("-r", "--port-range-start", type='int', dest='vm_port_start',
                       help='What port to start port allocations from (default %s)' % VM_PORT_START,
                       default=VM_PORT_START)
+    parser.add_option("-i", "--interface", type='string', dest='vm_iface', default=VM_IFACE,
+                      help='The interface to listen/use for vms (default %s)' % VM_IFACE)
     parser.add_option("--vm-expire-time", type='int', default=VM_EXPIRE_TIME,
                       help='How long to wait before expiring a mapping with no connections')
     parser.add_option("--stdout", action='store_false', dest='syslog', default=True,
@@ -112,7 +127,7 @@ if __name__=="__main__":
                       help="Name of custom backend class")
     parser.add_option("--backend-args", dest='backend_args', default='',
                       help='Arguments to custom backend')
-    parser.add_option("-f", "--persist-file", action='callback', callback=handle_persist_file,
+    parser.add_option("-f", "--persist-file", action='callback', type='string', callback=handle_persist_file,
                       help="DBM file prefix to persist mappings to (.dat/.dir may follow")
     parser.add_option("--ssl", action='store_true', default=False,
                       help='Start SSL/TLS on connections to the proxy port')
@@ -157,7 +172,7 @@ if __name__=="__main__":
     try:
         backend.start()
 
-        vSPC(options.proxy_port, options.admin_port, options.vm_port_start, options.vm_expire_time, backend, options.ssl, options.cert, options.key).run()
+        vSPC(options.proxy_port, options.admin_port, options.proxy_iface, options.admin_iface, options.vm_port_start, options.vm_iface, options.vm_expire_time, backend, options.ssl, options.cert, options.key).run()
     except KeyboardInterrupt:
         logging.info("Shutdown requested on keyboard, exiting")
         sys.exit(0)

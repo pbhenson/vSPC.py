@@ -94,6 +94,18 @@ If '--backend Foo' is given but no builtin backend Foo exists, vSPC.py
 tries to import module vSPCBackendFoo, looking for class vSPCBackendFoo.
 See --backend-help for programming details.
 
+## Building the distribution ##
+
+# source distribution #
+/path/to/your/python setup.py sdist
+
+# binary distribution #
+/path/to/your/python setup.py bdist
+
+# build rpm
+# make source dist and then:
+rpmbuild -ta vSPC-<version>.tar.gz
+
 ## Authors ##
 
 - Zach Loafman (initial implementation)

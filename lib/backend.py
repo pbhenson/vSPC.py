@@ -1,4 +1,4 @@
-# lib/backend.py -- various backend implementations
+# vSPC/backend.py -- various backend implementations
 
 # Copyright 2011 Isilon Systems LLC. All rights reserved.
 #

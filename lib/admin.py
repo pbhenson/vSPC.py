@@ -1,4 +1,4 @@
-# lib/admin.py -- things related to the implementation of the admin query protocol
+# vSPC/admin.py -- things related to the implementation of the admin query protocol
 
 # Copyright 2011 Isilon Systems LLC. All rights reserved.
 #

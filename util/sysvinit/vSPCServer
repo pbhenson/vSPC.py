@@ -1,0 +1,71 @@
+#!/bin/bash
+#
+# vSPCServer    Startup script for the virtual Serial Concentrator server
+# chkconfig: - 99 01
+# description: vSPC is a virtual Serial Port Concentrator for VMware virtual serial ports \
+#   available in ESXi 4.1+
+# processname: vSPCServer
+# config: /etc/sysconfig/vSPCServer
+# pidfile: /var/run/vSPC/Server.pid
+
+# Source function library.
+. /etc/init.d/functions
+
+RETVAL=0
+ARGS=""
+prog="/usr/bin/vSPCServer"
+service="vSPCServer"
+PIDDIR="/var/run/vSPC"
+PIDFILE="$PIDDIR/Server.pid"
+RUNAS=vspc
+OPTIONS="-f /var/run/vSPC/vm-mapping.db"
+
+if [ -r /etc/sysconfig/$service ]; then
+	. /etc/sysconfig/$service
+fi
+
+if [ ! -d $PIDDIR ]; then
+	mkdir $PIDDIR
+fi
+chown $RUNAS: $PIDDIR
+
+start () {
+	echo -n $"Starting $service: "
+	daemon --user "${RUNAS-nobody}" $prog --pidfile="$PIDFILE" ${OPTIONS-}
+	RETVAL=$?
+	echo
+	[ $RETVAL -eq 0 ] && touch /var/lock/subsys/$service
+}
+stop () {
+	echo -n $"Stopping $service: "
+	killproc -p $PIDFILE $prog
+	RETVAL=$?
+	echo
+	[ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$service
+}
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  status)
+	status -p $PIDFILE $prog
+	;;
+  restart|reload)
+	stop
+	start
+	;;
+  condrestart)
+	[ -f /var/lock/subsys/$prog ] && restart || :
+	;;
+  *)
+	echo $"Usage: $0 {start|stop|status|restart|reload|condrestart}"
+	exit 1
+esac
+
+exit $?
+
+# vim:syntax=sh

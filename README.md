@@ -48,7 +48,12 @@ in the program's usage text. Without options, the program will listen
 for VM connections on port 13770, listen for admin protocol connections
 on port 13371, and, for each connected VM, starts a telnet server that
 listens for and serves connections from clients to the VM end of the
-virtual serial port.
+virtual serial port. By default, the program listens for incoming proxy
+connections on 0.0.0.0, and listens for incoming admin protocol & client
+to VM connections on 127.0.0.1. Use the --proxy-port, --admin-port, and
+--port-range-start to change the default port settings; use
+--proxy-iface, --admin-iface, and --interface to change the default
+interface settings.
 
 As mentioned, vSPCServer starts a telnet server for each connected VM by
 default; by connecting to these servers with a telnet client, one can

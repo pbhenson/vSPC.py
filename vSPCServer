@@ -34,24 +34,30 @@ from optparse import OptionParser, OptionValueError
 from vSPC.server import vSPC
 from vSPC.backend import vSPCBackendMemory, vSPCBackendFile, vSPCBackendLogging
 
-# Default for --proxy-port, the port to send VMs to.
+# Default for --proxy-port, the port that incoming vSphere connections
+# (from VMs) connect to.
 PROXY_PORT = 13370
 
-# Default for --proxy-iface, the interface to send VMs to.
+# Default for --proxy-iface, the interface that incoming vSphere
+# connections come in on.
 PROXY_IFACE = "0.0.0.0"
 
-# Default for --admin-port, the port to hit vSPC-query with
+# Default for --admin-port, the port that incoming admin protocol/query
+# connections connect to.
 ADMIN_PORT = 13371
 
-# Default for --admin-iface, the interface to hit vSPC-query with
+# Default for --admin-iface, the interface that incoming admin
+# protocol/query connections come in on.
 ADMIN_IFACE = "127.0.0.1"
 
-# Default for --port-range-start, start of port range to assign VMs.
-# Ports may be reallocated within the range, based on active connections
-# and --expire.
+# Default for --port-range-start, start of port range to assign VMs when
+# opening client connection listeners.  Ports may be reallocated within
+# the range, based on active connections and --expire. Ignored if
+# --no-vm-ports is given.
 VM_PORT_START = 50000
 
-# Default listen interface for VMs
+# Default for --interface, the interface that client-to-VM connections
+# come in on. Ignored if --no-vm-ports is given.
 VM_IFACE = "127.0.0.1"
 
 # Default for --expire, number of seconds a VM (based on uuid) holds a

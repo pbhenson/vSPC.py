@@ -116,5 +116,6 @@ rpmbuild -ta vSPC-<version>.tar.gz
 - Zach Loafman (initial implementation)
 - Kevan Carstensen (SSL support, logging backend, lazy client connections to VMs, internal work necessary to support lazy connections to VMs)
 - Dave Johnson (fixes for missing getopt modules and missing shelf.sync() calls)
+- Fabien Wernli (add options to configure listen interface, fix broken -f option, packaging improvements)
 
 [1] http://sourceforge.net/p/vspcpy/home/Home/

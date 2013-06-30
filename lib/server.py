@@ -86,9 +86,9 @@ class vSPC(Poller, VMExtHandler):
 
         self.proxy_port = proxy_port
         self.admin_port = admin_port
-	self.vm_iface = vm_iface
-	self.proxy_iface = proxy_iface;
-	self.admin_iface = admin_iface;
+        self.vm_iface = vm_iface
+        self.proxy_iface = proxy_iface;
+        self.admin_iface = admin_iface;
         if not vm_port_start: # account for falsey things, not just None
             vm_port_start = None
         self.vm_port_next = vm_port_start
@@ -458,7 +458,7 @@ class vSPC(Poller, VMExtHandler):
         assert not self.ports.has_key(vm.port)
         self.ports[vm.port] = vm.uuid
 
-        vm.listener = openport(vm.port,self.vm_iface)
+        vm.listener = openport(vm.port, self.vm_iface)
         self.add_reader(vm, self.queue_new_client_connection)
 
     def create_old_vms(self, vms):

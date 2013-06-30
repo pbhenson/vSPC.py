@@ -13,12 +13,12 @@ setup(
     author = "Zach Loafman",
     author_email = "zmerlynn@sf.net",
     description = ("vSPC is a virtual Serial Port Concentrator for VMware virtual serial ports,"
-	                 "available in ESXi 4.1+."),
+                   "available in ESXi 4.1+."),
     license = "BSD",
     keywords = "ESX VMWare serial port concentrator",
     url = "https://github.com/isnotajoke/vSPC.py",
     package_dir = {'vSPC': 'lib'},
-	  scripts = [ 'vSPCClient', 'vSPCServer' ],
+    scripts = [ 'vSPCClient', 'vSPCServer' ],
     data_files = [('/etc/init.d', ['util/sysvinit/vSPCServer'])],
     packages=['vSPC'],
     #apparently this doesn't always work need to look into this
@@ -27,7 +27,7 @@ setup(
       "Development Status :: 3 - Alpha",
       "Topic :: Utilities",
       "License :: OSI Approved :: BSD License",
-    	],
+    ],
 )
 
 

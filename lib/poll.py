@@ -39,8 +39,12 @@ class Poller:
         self.write_handlers = {}
 
         # fileno => stream
+        # needed to associate filenos returned by epoll.poll with streams.
         self.fds = {}
+
         # stream => epoll mask
+        # needed to associate streams passed by higher-level apps with
+        # epoll masks.
         self.fd_mask = {}
 
         self.lock = threading.Lock()

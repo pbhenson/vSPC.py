@@ -88,7 +88,7 @@ class Poller:
 
         self.epoll = select.epoll()
 
-    def has_stream(self, stream):
+    def unsafe_has_stream(self, stream):
         # called with self.lock
         return stream in self.event_sources_by_stream
 
@@ -101,7 +101,7 @@ class Poller:
 
     def add_reader(self, stream, func):
         with self.lock:
-            if not self.has_stream(stream):
+            if not self.unsafe_has_stream(stream):
                 self.unsafe_add_stream(stream)
 
             pes = self.event_sources_by_stream[stream]
@@ -121,7 +121,7 @@ class Poller:
 
     def add_writer(self, stream, func):
         with self.lock:
-            if not self.has_stream(stream):
+            if not self.unsafe_has_stream(stream):
                 self.unsafe_add_stream(stream)
 
             pes = self.event_sources_by_stream[stream]

@@ -33,6 +33,9 @@ import select
 import threading
 
 class PollEventSource:
+    """
+    Encapsulates epoll state around a stream provided by other code.
+    """
     def __init__(self, stream):
         self.fileno        = stream.fileno()
         self.stream        = stream
@@ -41,15 +44,19 @@ class PollEventSource:
         self.mask          = select.EPOLLERR | select.EPOLLHUP
 
     def enable_writes(self):
+        """Alter epoll mask so epoll triggers on write events"""
         self.mask |= select.EPOLLOUT
 
     def disable_writes(self):
+        """Alter epoll mask so epoll doesn't trigger on write events"""
         self.mask &= ~select.EPOLLOUT
 
     def enable_reads(self):
+        """Alter epoll mask so epoll triggers on read events"""
         self.mask |= select.EPOLLIN
 
     def disable_reads(self):
+        """Alter epoll mask for epoll doesn't trigger on read events"""
         self.mask &= ~select.EPOLLIN
 
 class Poller:

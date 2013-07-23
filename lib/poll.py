@@ -80,6 +80,9 @@ class Poller:
         # used to translate filenos from epoll
         self.event_sources_by_fileno = {}
 
+        # If a stream is in event_sources_by_stream, its fileno should
+        # be in event_sources_by_fileno, and vice-versa.
+
         # Poller needs to be thread safe, as client code may use
         # threads. All code that changes self.event_sources_by_stream or
         # self.event_sources_by_fileno needs to do so while holding the
@@ -89,17 +92,25 @@ class Poller:
         self.epoll = select.epoll()
 
     def unsafe_has_stream(self, stream):
-        # called with self.lock
+        """
+        Return True if stream is known to Poller, False otherwise.
+        """
         return stream in self.event_sources_by_stream
 
     def unsafe_add_stream(self, stream):
-        # called with self.lock
+        """
+        Add stream to Poller, updating internal state as necessary to
+        get ready to start listening for events on the stream.
+        """
         pes = PollEventSource(stream)
         self.event_sources_by_stream[stream] = pes
         self.event_sources_by_fileno[pes.fileno] = pes
         self.epoll.register(pes.fileno, pes.mask)
 
     def add_reader(self, stream, func):
+        """
+        Associate func with stream's read events.
+        """
         with self.lock:
             if not self.unsafe_has_stream(stream):
                 self.unsafe_add_stream(stream)
@@ -111,6 +122,9 @@ class Poller:
             self.epoll.modify(pes.fileno, pes.mask)
 
     def del_reader(self, stream):
+        """
+        Stop watching for read events on stream.
+        """
         with self.lock:
             try:
                 pes = self.event_sources_by_stream[stream]
@@ -120,6 +134,9 @@ class Poller:
                 pass
 
     def add_writer(self, stream, func):
+        """
+        Associate func with stream's write events.
+        """
         with self.lock:
             if not self.unsafe_has_stream(stream):
                 self.unsafe_add_stream(stream)
@@ -131,6 +148,9 @@ class Poller:
             self.epoll.modify(pes.fileno, pes.mask)
 
     def del_writer(self, stream):
+        """
+        Stop watching for write events on stream.
+        """
         with self.lock:
             try:
                 pes = self.event_sources_by_stream[stream]
@@ -140,17 +160,25 @@ class Poller:
                 pass
 
     def del_all(self, stream):
+        """
+        Stop watching for any events on stream.
+        """
         self.del_reader(stream)
         self.del_writer(stream)
 
     def unsafe_remove_fd(self, fd):
-        # called with self.lock
+        """
+        Remove stream & associate state from Poller.
+        """
         pes = self.event_sources_by_stream[fd]
         self.epoll.unregister(pes.fileno)
         del self.event_sources_by_stream[fd]
         del self.event_sources_by_fileno[pes.fileno]
 
     def run_once(self, timeout = -1):
+        """
+        Poll for events on monitored streams, then process them.
+        """
         try:
             events = self.epoll.poll(timeout)
         except IOError, e:
@@ -179,6 +207,9 @@ class Poller:
                     self.unsafe_remove_fd(fd)
 
     def run_forever(self):
+        """
+        Repeatedly poll for & process events.
+        """
         while True:
             self.run_once()
 

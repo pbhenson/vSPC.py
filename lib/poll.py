@@ -68,6 +68,10 @@ class Poller:
         # used to translate filenos from epoll
         self.event_sources_by_fileno = {}
 
+        # Poller needs to be thread safe, as client code may use
+        # threads. All code that changes self.event_sources_by_stream or
+        # self.event_sources_by_fileno needs to do so while holding the
+        # lock.
         self.lock = threading.Lock()
 
         self.epoll = select.epoll()

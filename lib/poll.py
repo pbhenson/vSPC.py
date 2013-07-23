@@ -60,6 +60,18 @@ class PollEventSource:
         self.mask &= ~select.EPOLLIN
 
 class Poller:
+    """
+    Manage & respond to events on a set of streams.
+
+    Each stream is assumed to be a file descriptor like object (or at
+    least an object with a fileno method that resolves to a fileno), and
+    can have a read and write handler associated with it. Poller will
+    monitor the descriptor for activity, and call the read or write
+    handler as appropriate when it detects activity.
+
+    Poller uses Linux's epoll facility to work. See epoll(7) for more
+    information on epoll.
+    """
     def __init__(self):
         # stream => PollEventSource instance
         # used to translate arguments from higher level code

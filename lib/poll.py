@@ -80,7 +80,7 @@ class Poller:
         # called with self.lock
         return stream in self.event_sources_by_stream
 
-    def add_stream(self, stream):
+    def unsafe_add_stream(self, stream):
         # called with self.lock
         pes = PollEventSource(stream)
         self.event_sources_by_stream[stream] = pes
@@ -90,7 +90,7 @@ class Poller:
     def add_reader(self, stream, func):
         with self.lock:
             if not self.has_stream(stream):
-                self.add_stream(stream)
+                self.unsafe_add_stream(stream)
 
             pes = self.event_sources_by_stream[stream]
             pes.read_handler = func
@@ -110,7 +110,7 @@ class Poller:
     def add_writer(self, stream, func):
         with self.lock:
             if not self.has_stream(stream):
-                self.add_stream(stream)
+                self.unsafe_add_stream(stream)
 
             pes = self.event_sources_by_stream[stream]
             pes.write_handler = func
@@ -131,7 +131,7 @@ class Poller:
         self.del_reader(stream)
         self.del_writer(stream)
 
-    def remove_fd(self, fd):
+    def unsafe_remove_fd(self, fd):
         # called with self.lock
         pes = self.event_sources_by_stream[fd]
         self.epoll.unregister(pes.fileno)
@@ -164,7 +164,7 @@ class Poller:
                 with self.lock:
                     pes = self.event_sources_by_fileno[fileno]
                     fd = pes.stream
-                    self.remove_fd(fd)
+                    self.unsafe_remove_fd(fd)
 
     def run_forever(self):
         while True:

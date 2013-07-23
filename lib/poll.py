@@ -64,7 +64,7 @@ class Poller:
     Manage & respond to events on a set of streams.
 
     Each stream is assumed to be a file descriptor like object (or at
-    least an object with a fileno method that resolves to a fileno), and
+    least an object with a fileno method that resolves to an fd), and
     can have a read and write handler associated with it. Poller will
     monitor the descriptor for activity, and call the read or write
     handler as appropriate when it detects activity.

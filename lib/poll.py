@@ -32,68 +32,87 @@ import logging
 import select
 import threading
 
+class PollEventSource:
+    def __init__(self, stream):
+        self.fileno        = stream.fileno()
+        self.stream        = stream
+        self.read_handler  = None
+        self.write_handler = None
+        self.mask          = select.EPOLLERR | select.EPOLLHUP
+
+    def enable_writes(self):
+        self.mask |= select.EPOLLOUT
+
+    def disable_writes(self):
+        self.mask &= ~select.EPOLLOUT
+
+    def enable_reads(self):
+        self.mask |= select.EPOLLIN
+
+    def disable_reads(self):
+        self.mask &= ~select.EPOLLIN
+
 class Poller:
     def __init__(self):
-        # stream => func
-        self.read_handlers = {}
-        self.write_handlers = {}
-
-        # fileno => stream
-        # needed to associate filenos returned by epoll.poll with streams.
-        self.fds = {}
-
-        # stream => epoll mask
-        # needed to associate streams passed by higher-level apps with
-        # epoll masks.
-        self.fd_mask = {}
+        # stream => PollEventSource instance
+        # used to translate arguments from higher level code
+        self.event_sources_by_stream = {}
+        # fileno => PollEventSource instance
+        # used to translate filenos from epoll
+        self.event_sources_by_fileno = {}
 
         self.lock = threading.Lock()
 
         self.epoll = select.epoll()
 
+    def has_stream(self, stream):
+        # called with self.lock
+        return stream in self.event_sources_by_stream
+
     def add_stream(self, stream):
         # called with self.lock
-        self.fds[stream.fileno()] = stream
-        self.fd_mask[stream] = select.EPOLLERR | select.EPOLLHUP
-        self.epoll.register(stream, self.fd_mask[stream])
+        pes = PollEventSource(stream)
+        self.event_sources_by_stream[stream] = pes
+        self.event_sources_by_fileno[pes.fileno] = pes
+        self.epoll.register(pes.fileno, pes.mask)
 
     def add_reader(self, stream, func):
         with self.lock:
-            if stream.fileno() not in self.fds:
+            if not self.has_stream(stream):
                 self.add_stream(stream)
 
-            self.read_handlers[stream] = func
+            pes = self.event_sources_by_stream[stream]
+            pes.read_handler = func
+            pes.enable_reads()
 
-            assert stream in self.fd_mask
-            self.fd_mask[stream] |= select.EPOLLIN
-
-            self.epoll.modify(stream, self.fd_mask[stream])
+            self.epoll.modify(pes.fileno, pes.mask)
 
     def del_reader(self, stream):
         with self.lock:
             try:
-                self.fd_mask[stream] &= ~select.EPOLLIN
-                self.epoll.modify(stream, self.fd_mask[stream])
+                pes = self.event_sources_by_stream[stream]
+                pes.disable_reads()
+                self.epoll.modify(pes.fileno, pes.mask)
             except KeyError:
                 pass
 
     def add_writer(self, stream, func):
         with self.lock:
-            if stream.fileno() not in self.fds:
+            if not self.has_stream(stream):
                 self.add_stream(stream)
 
-            self.write_handlers[stream] = func
+            pes = self.event_sources_by_stream[stream]
+            pes.write_handler = func
+            pes.enable_writes()
 
-            assert stream in self.fd_mask
-            self.fd_mask[stream] |= select.EPOLLOUT
-
-            self.epoll.modify(stream, self.fd_mask[stream])
+            self.epoll.modify(pes.fileno, pes.mask)
 
     def del_writer(self, stream):
         with self.lock:
             try:
-                self.fd_mask[stream] &= ~select.EPOLLOUT
-                self.epoll.modify(stream, self.fd_mask[stream])
+                pes = self.event_sources_by_stream[stream]
+                pes.disable_writes()
+                self.epoll.modify(pes.fileno, pes.mask)
             except KeyError:
                 pass
 
@@ -102,9 +121,11 @@ class Poller:
         self.del_writer(stream)
 
     def remove_fd(self, fd):
-        self.epoll.unregister(fd)
-        del self.fds[fd.fileno()]
-        del self.fd_mask[fd]
+        # called with self.lock
+        pes = self.event_sources_by_stream[fd]
+        self.epoll.unregister(pes.fileno)
+        del self.event_sources_by_stream[fd]
+        del self.event_sources_by_fileno[pes.fileno]
 
     def run_once(self, timeout = -1):
         try:
@@ -116,21 +137,22 @@ class Poller:
             if event == select.EPOLLIN or event == select.EPOLLERR or event == select.EPOLLHUP:
                 # read event, or error condition that we should treat like a read event
                 with self.lock:
-                    fd = self.fds[fileno]
-                    handler = self.read_handlers[fd]
-                handler(fd)
+                    pes = self.event_sources_by_fileno[fileno]
+                    handler = pes.read_handler
+                handler(pes.stream)
             elif event == select.EPOLLOUT:
                 # write event
                 with self.lock:
-                    fd = self.fds[fileno]
-                    handler = self.write_handlers[fd]
-                handler(fd)
+                    pes = self.event_sources_by_fileno[fileno]
+                    handler = pes.write_handler
+                handler(pes.stream)
             else:
                 # Event that we don't know how to handle.
                 logging.debug("I was asked to handle an unsupported event (%d) "
                               "for fd %d. I'm removing fd %d" % (event, fileno, fileno))
                 with self.lock:
-                    fd = self.fds[fileno]
+                    pes = self.event_sources_by_fileno[fileno]
+                    fd = pes.stream
                     self.remove_fd(fd)
 
     def run_forever(self):

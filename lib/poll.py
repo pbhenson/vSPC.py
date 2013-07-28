@@ -199,8 +199,13 @@ class Poller:
         try:
             events = self.epoll.poll(timeout)
         except IOError, e:
-            # interrupted syscall
-            return False
+            if e.errno == errno.EINTR:
+                # interrupted syscall; continue w/o error
+                return False
+
+            # unknown error; raise exception
+            raise
+
         for (fileno, event) in events:
             if event == select.EPOLLIN or event == select.EPOLLERR or event == select.EPOLLHUP:
                 # read event, or error condition that we should treat like a read event

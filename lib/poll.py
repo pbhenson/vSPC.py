@@ -188,9 +188,9 @@ class Poller:
         Remove stream & associate state from Poller.
         """
         pes = self.event_sources_by_stream[fd]
-        self.epoll.unregister(pes.fileno)
         del self.event_sources_by_stream[fd]
         del self.event_sources_by_fileno[pes.fileno]
+        self.epoll.unregister(pes.fileno)
 
     def run_once(self, timeout = -1):
         """

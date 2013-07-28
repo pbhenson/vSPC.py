@@ -28,6 +28,7 @@
 # authors and should not be interpreted as representing official policies, either expressed
 # or implied, of <copyright holder>.
 
+import errno
 import logging
 import select
 import threading
@@ -165,6 +166,22 @@ class Poller:
         """
         self.del_reader(stream)
         self.del_writer(stream)
+
+    def delete_stream(self, stream):
+        """
+        Delete stream from Poller. Call to handle disconnects, errors, etc.
+
+        Tolerates some errors associated with common use cases:
+            - Won't raise error on EBADF (disconnected/closed FDs may be
+              removed from epoll set automatically, in which case
+              attempts to do so by user code will raise EBADF)
+        """
+        with self.lock:
+            try:
+                self.unsafe_remove_fd(stream)
+            except IOError, e:
+                if e.errno != errno.EBADF:
+                    raise
 
     def unsafe_remove_fd(self, fd):
         """

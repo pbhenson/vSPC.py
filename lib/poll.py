@@ -222,7 +222,7 @@ class Poller:
             else:
                 # Event that we don't know how to handle.
                 logging.debug("I was asked to handle an unsupported event (%d) "
-                              "for fd %d. I'm removing fd %d" % (event, fileno, fileno))
+                              "for fd %d. I'm removing fd %d", event, fileno, fileno)
                 with self.lock:
                     pes = self.event_sources_by_fileno[fileno]
                     fd = pes.stream

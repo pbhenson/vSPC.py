@@ -198,11 +198,11 @@ class TelnetServer(FixedTelnet):
         self.send_buffer = ''
 
         for opt in self.server_opts:
-            logging.debug("sending WILL %d" % ord(opt))
+            logging.debug("sending WILL %d", ord(opt))
             self._send_cmd(WILL + opt)
             self.unacked.append((WILL, opt))
         for opt in self.client_opts:
-            logging.debug("sending DO %d" % ord(opt))
+            logging.debug("sending DO %d", ord(opt))
             self._send_cmd(DO + opt)
             self.unacked.append((DO, opt))
 
@@ -212,7 +212,7 @@ class TelnetServer(FixedTelnet):
     def _option_callback(self, sock, cmd, opt):
         if cmd in (DO, DONT):
             if opt not in self.server_opts:
-                logging.debug("client wants us to %d, sending WONT" % ord(opt))
+                logging.debug("client wants us to %d, sending WONT", ord(opt))
                 self._send_cmd(WONT + opt)
                 return
 
@@ -223,20 +223,20 @@ class TelnetServer(FixedTelnet):
                 self.unacked.remove((WILL, opt))
 
             if cmd == DONT:
-                logging.debug("client doesn't want us to %d" % ord(opt))
+                logging.debug("client doesn't want us to %d", ord(opt))
                 try:
                     self.server_opts_accepted.remove(opt)
                 except ValueError:
                     pass
             else:
-                logging.debug("client says we should %d" % ord(opt))
+                logging.debug("client says we should %d", ord(opt))
 
             if not msg_is_reply:
                 # Remind client that we want this option
                 self._send_cmd(WILL + opt)
         elif cmd in (WILL, WONT):
             if opt not in self.client_opts:
-                logging.debug("client wants to %d, sending DONT" % ord(opt))
+                logging.debug("client wants to %d, sending DONT", ord(opt))
                 self._send_cmd(DONT + opt)
                 return
 
@@ -247,13 +247,13 @@ class TelnetServer(FixedTelnet):
                 self.unacked.remove((DO, opt))
 
             if cmd == WONT:
-                logging.debug("client won't %d" % ord(opt))
+                logging.debug("client won't %d", ord(opt))
                 try:
                     self.client_opts_accepted.remove(opt)
                 except ValueError:
                     pass
             else:
-                logging.debug("client will %d" % ord(opt))
+                logging.debug("client will %d", ord(opt))
 
             if not msg_is_reply:
                 # Remind client that we want this option
@@ -261,7 +261,7 @@ class TelnetServer(FixedTelnet):
         elif cmd == SB:
             pass # Don't log this, caller is processing
         else:
-            logging.debug("cmd %d %s" % (ord(cmd), opt))
+            logging.debug("cmd %d %s", ord(cmd), opt)
 
     def process_available(self):
         """Process all data, but don't take anything off the cooked queue.
@@ -277,10 +277,10 @@ class TelnetServer(FixedTelnet):
         if self.unacked:
             desc = map(lambda (x,y): (ord(x), ord(y)), self.unacked)
             if time.time() > self.last_ack + UNACK_TIMEOUT:
-                logging.debug("timeout waiting for commands %s" % desc)
+                logging.debug("timeout waiting for commands %s", desc)
                 self.unacked = []
             else:
-                logging.debug("still waiting for %s" % desc)
+                logging.debug("still waiting for %s", desc)
 
         return not self.unacked
 
@@ -328,15 +328,16 @@ class VMTelnetServer(TelnetServer):
         self.sock.sendall(IAC + SB + VMWARE_EXT + s + IAC + SE)
 
     def _handle_known_options(self, data):
-        logging.debug("client knows VM commands: %s" % map(ord, data))
+        logging.debug("client knows VM commands: %s", map(ord, data))
 
     def _handle_unknown_option(self, data):
-        logging.debug("client doesn't know VM command %d, dropping" % hexdump(data))
+        logging.debug("client doesn't know VM command %d, dropping",
+                      hexdump(data))
 
     def _handle_do_proxy(self, data):
         dir = 'client' if data[:1] == "C" else 'server'
         uri = data[1:]
-        logging.debug("client wants to proxy %s to %s" % (dir, uri))
+        logging.debug("client wants to proxy %s to %s", dir, uri)
         if dir == 'server' and uri == BASENAME:
             self._send_vmware(WILL_PROXY)
         else:
@@ -346,19 +347,19 @@ class VMTelnetServer(TelnetServer):
         cookie = data + struct.pack("i", hash(self) & 0xFFFFFFFF)
 
         if self.handler.handle_vmotion_begin(self, cookie):
-            logging.debug("vMotion initiated: %s" % hexdump(cookie))
+            logging.debug("vMotion initiated: %s", hexdump(cookie))
             self._send_vmware(VMOTION_GOAHEAD + cookie)
         else:
-            logging.debug("vMotion denied: %s" % hexdump(cookie))
+            logging.debug("vMotion denied: %s", hexdump(cookie))
             self._send_vmware(VMOTION_NOTNOW + cookie)
 
     def _handle_vmotion_peer(self, cookie):
         if self.handler.handle_vmotion_peer(self, cookie):
-            logging.debug("vMotion peer: %s" % hexdump(cookie))
+            logging.debug("vMotion peer: %s", hexdump(cookie))
             self._send_vmware(VMOTION_PEER_OK + cookie)
         else:
             # There's no clear spec on rejecting this
-            logging.debug("vMotion peer rejected: %s" % hexdump(cookie))
+            logging.debug("vMotion peer rejected: %s", hexdump(cookie))
             self._send_vmware(UNKNOWN_SUBOPTION_RCVD_2 + VMOTION_PEER)
 
     def _handle_vmotion_complete(self, data):
@@ -374,7 +375,7 @@ class VMTelnetServer(TelnetServer):
             self.handler.handle_vc_uuid(self)
         elif self.uuid != data:
             logging.warn("conflicting uuids? "
-                         "old: %s, new: %s" % (self.uuid, data))
+                         "old: %s, new: %s", self.uuid, data)
             self.close()
 
     def _handle_vm_name(self, data):
@@ -418,8 +419,8 @@ class VMTelnetServer(TelnetServer):
                 self.unacked.remove((VMWARE_EXT, subcmd))
 
         if not handled:
-            logging.debug('VMware command %d (data %s) not handled' \
-                              % (ord(subcmd), hexdump(data)))
+            logging.debug('VMware command %d (data %s) not handled',
+                          ord(subcmd), hexdump(data))
             self._send_vmware(UNKNOWN_SUBOPTION_RCVD_2 + subcmd)
 
 class VMTelnetProxyClient(TelnetServer):
@@ -435,13 +436,13 @@ class VMTelnetProxyClient(TelnetServer):
         self.sock.sendall(IAC + SB + VMWARE_EXT + s + IAC + SE)
 
     def _handle_known_options(self, data):
-        logging.debug("client knows VM commands: %s" % map(ord, data))
+        logging.debug("client knows VM commands: %s", map(ord, data))
 
     def _handle_unknown_option(self, data):
-        logging.debug("client doesn't know VM command %d, dropping" % hexdump(data))
+        logging.debug("client doesn't know VM command %d, dropping", hexdump(data))
 
     def _handle_unknown_option_resp(self, data):
-        logging.debug("client doesn't know VM command %s, dropping" % hexdump(data))
+        logging.debug("client doesn't know VM command %s, dropping", hexdump(data))
 
     def _handle_get_vm_name(self, data):
         self._send_vmware(VM_NAME + self.vm_name)
@@ -450,10 +451,12 @@ class VMTelnetProxyClient(TelnetServer):
         self._send_vmware(VM_VC_UUID + self.vm_uuid)
 
     def _handle_do_proxy_will(self, data):
-        logging.debug("proxy will handle proxy request for vm %s (%s)" % (self.vm_name, self.vm_uuid))
+        logging.debug("proxy will handle proxy request for vm %s (%s)",
+                      self.vm_name, self.vm_uuid)
 
     def _handle_do_proxy_wont(self, data):
-        logging.debug("proxy won't handle proxy request for vm %s (%s)" % (self.vm_name, self.vm_uuid))
+        logging.debug("proxy won't handle proxy request for vm %s (%s)",
+                      self.vm_name, self.vm_uuid)
         # XXX: Consider more robust error handling here?
         self.close()
 
@@ -501,7 +504,7 @@ class VMTelnetProxyClient(TelnetServer):
                 self.unacked.remove((VMWARE_EXT, subcmd))
 
         if not handled:
-            logging.debug('VMware command %d (data %s) not handled' \
-                              % (ord(subcmd), hexdump(data)))
+            logging.debug('VMware command %d (data %s) not handled',
+                          ord(subcmd), hexdump(data))
             self._send_vmware(UNKNOWN_SUBOPTION_RCVD_2 + subcmd)
 

@@ -340,8 +340,11 @@ class VMTelnetServer(TelnetServer):
         logging.debug("client wants to proxy %s to %s", dir, uri)
         if dir == 'server' and uri == BASENAME:
             self._send_vmware(WILL_PROXY)
+            logging.debug("direction and uri are correct, will proxy")
         else:
             self._send_vmware(WONT_PROXY)
+            logging.error("client serial configuration incorrect (direction: "
+                "%s, uri: %s), will not proxy for this VM", dir, uri)
 
     def _handle_vmotion_begin(self, data):
         cookie = data + struct.pack("i", hash(self) & 0xFFFFFFFF)

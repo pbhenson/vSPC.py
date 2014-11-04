@@ -92,6 +92,9 @@ class vSPCBackendMemory:
         self.observer_thread = self._start_thread(self.observer_run)
         self.hook_thread = self._start_thread(self.hook_run)
 
+    def shutdown(self):
+        pass
+
     def _queue_run(self, queue):
         while True:
             try:
@@ -360,6 +363,9 @@ class vSPCBackendFile(vSPCBackendMemory):
 
         self.shelf = shelve.open(options.filename)
 
+    def shutdown(self):
+        self.shelf.close()
+
     def vm_hook(self, uuid, name, port):
         self.shelf[uuid] = { P_UUID : uuid, P_NAME : name, P_PORT : port }
         self.shelf.sync()
@@ -398,6 +404,10 @@ class vSPCBackendLogging(vSPCBackendMemory):
         # How many scrollback lines to keep for each VM.
         self.scrollback_limit = options.context
 
+    def shutdown(self):
+        for k, f in self.logfiles.iteritems():
+            f.close()
+
     def add_scrollback(self, uuid, msg):
         msgs = self.scrollback.setdefault(uuid, "")
         msgs += msg
@@ -428,7 +438,6 @@ class vSPCBackendLogging(vSPCBackendMemory):
         # XXX: Annoying; it would be nicer if OptionParser would print
         # out a more verbose message upon encountering unrecognized
         # arguments
-        u = "%prog ...--backend-args='[ [ (-l | --logdir) logdir ] [ (-p | --prefix) prefix ] [ (-m | --mode) mode ]'"
         group.add_option("-l", "--logdir", type='string',
                          action='store', default="/var/log/consoles",
                          help='Directory in which log files are written')

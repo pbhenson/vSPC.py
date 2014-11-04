@@ -206,7 +206,9 @@ if __name__=="__main__":
             options.key).run()
     except KeyboardInterrupt:
         logging.info("Shutdown requested on keyboard, exiting")
+        backend.shutdown()
         sys.exit(0)
     except Exception, e:
         logging.exception("Top level exception caught")
+        backend.shutdown()
         sys.exit(1)

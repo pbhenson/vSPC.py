@@ -29,7 +29,7 @@
 # authors and should not be interpreted as representing official policies, either expressed
 # or implied, of <copyright holder>.
 
-BASENAME='vSPC.py'
+BASENAME = 'vSPC.py'
 
 import logging
 import struct
@@ -41,7 +41,7 @@ from telnetlib import IAC,DO,DONT,WILL,WONT,BINARY,ECHO,SGA,SB,SE,NOOPT,theNULL
 # How long to wait for an option response. Any option response resets
 # the counter. This is mainly to deal with "raw" connections (like
 # gdb) that don't negotiate telnet options at all.
-UNACK_TIMEOUT=0.5
+UNACK_TIMEOUT = 0.5
 
 VMWARE_EXT = chr(232) # VMWARE-TELNET-EXT
 
@@ -97,7 +97,7 @@ telnet client. This port is intended for VMware connections only.\r
 '''
 
 def hexdump(data):
-    return reduce(lambda x,y: x + ('%x' % ord(y)), data, '')
+    return reduce(lambda x, y: x + ('%x' % ord(y)), data, '')
 
 class FixedTelnet(Telnet):
     '''
@@ -275,7 +275,7 @@ class TelnetServer(FixedTelnet):
     def negotiation_done(self):
         self.process_available()
         if self.unacked:
-            desc = map(lambda (x,y): (ord(x), ord(y)), self.unacked)
+            desc = map(lambda (x, y): (ord(x), ord(y)), self.unacked)
             if time.time() > self.last_ack + UNACK_TIMEOUT:
                 logging.debug("timeout waiting for commands %s" % desc)
                 self.unacked = []

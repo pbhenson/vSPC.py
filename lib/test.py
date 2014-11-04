@@ -6,7 +6,6 @@ import logging
 import socket
 import sys
 import termios
-import time
 
 from poll import Poller
 from telnet import VMTelnetProxyClient

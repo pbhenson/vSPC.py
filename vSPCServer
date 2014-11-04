@@ -107,7 +107,22 @@ def get_backend_type(shortname):
     return backend_type
 
 if __name__=="__main__":
-    parser = OptionParser(description="Start Virtual Serial Port concentrator")
+    # pull out any specified backend so we can provide usage statements
+    # XXX this is a pseudo-hack
+    backend_type = "Memory"
+    if "--backend" in sys.argv:
+        try:
+            backend_type = sys.argv[sys.argv.index("--backend") + 1]
+        except:
+            pass
+
+    backend = get_backend_type(backend_type)()
+
+    # Now parse the command line
+    parser = OptionParser(
+        description="Start Virtual Serial Port concentrator",
+        conflict_handler="resolve")
+
     parser.add_option("-d", "--debug", action='store_true', default=False,
                       help="Debug mode (turns up logging and implies --stdout --no-fork)")
     parser.add_option("-a", "--admin-port", type='int', default=ADMIN_PORT,
@@ -131,10 +146,9 @@ if __name__=="__main__":
                       help="Don't daemonize")
     parser.add_option("--backend", dest='backend_type_name', default='Memory',
                       help="Name of custom backend class")
-    parser.add_option("--backend-args", dest='backend_args', default='',
-                      help='Arguments to custom backend')
-    parser.add_option("-f", "--persist-file", action='callback', type='string', callback=handle_persist_file,
-                      help="DBM file prefix to persist mappings to (.dat/.dir may follow")
+    parser.add_option("-f", "--persist-file", dest="persist_file",
+                      help="DBM file prefix to persist mappings to (.dat/.dir may follow. "
+                      "This is shorthand for --backend File --file FILE.")
     parser.add_option("--ssl", action='store_true', default=False,
                       help='Start SSL/TLS on connections to the proxy port')
     parser.add_option("--cert", default=None,
@@ -147,6 +161,9 @@ if __name__=="__main__":
                       help="The file to write the server's process ID to")
     parser.add_option("--no-vm-ports", action='store_false', dest='vm_port_start',
                       help='Whether to listen for incoming telnet connections to connected VMs.')
+
+    parser.add_option_group(backend.get_option_group(parser))
+
     (options, args) = parser.parse_args()
 
     logger = logging.getLogger('')
@@ -165,8 +182,13 @@ if __name__=="__main__":
     if options.ssl and not options.cert:
         parser.error("Must specify certificate in order to use SSL")
 
-    backend = get_backend_type(options.backend_type_name)()
-    backend.setup(options.backend_args)
+    try:
+        backend.setup(options)
+    except ValueError, err:
+        parser.error(err)
+        sys.exit(2)
+
+    backend.setup(options)
 
     if options.fork and not options.debug:
         daemonize()
@@ -178,7 +200,10 @@ if __name__=="__main__":
     try:
         backend.start()
 
-        vSPC(options.proxy_port, options.admin_port, options.proxy_iface, options.admin_iface, options.vm_port_start, options.vm_iface, options.vm_expire_time, backend, options.ssl, options.cert, options.key).run()
+        vSPC(options.proxy_port, options.admin_port, options.proxy_iface,
+            options.admin_iface, options.vm_port_start, options.vm_iface,
+            options.vm_expire_time, backend, options.ssl, options.cert,
+            options.key).run()
     except KeyboardInterrupt:
         logging.info("Shutdown requested on keyboard, exiting")
         sys.exit(0)

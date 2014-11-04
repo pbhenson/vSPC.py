@@ -34,7 +34,6 @@ import logging
 import optparse
 import os
 import pickle
-import shlex
 import signal
 import string
 import sys
@@ -71,10 +70,13 @@ class vSPCBackendMemory:
 
         self.hook_queue = Queue.Queue()
 
-    def setup(self, args):
-        if args != '':
-            print "%s takes no arguments" % str(self.__class__)
-            sys.exit(1)
+    def get_option_group(self, parser):
+        group = optparse.OptionGroup(parser, "Memory backend options",
+            "This backend takes no arguments")
+        return group
+
+    def setup(self, options):
+        pass
 
     def _start_thread(self, f):
         th = threading.Thread(target = f)
@@ -343,39 +345,20 @@ class vSPCBackendFile(vSPCBackendMemory):
 
         self.shelf = None
 
-    def usage(self):
-        sys.stderr.write('''\
-%s options: [-h|--help] -f|--file filename
+    def get_option_group(self, parser):
+        group = optparse.OptionGroup(parser, "File backend options")
+        group.add_option("-f", "--file", dest="filename",
+            help="DBM file prefix to persist mappings to (.dat/.dir may follow")
 
-  -h|--help: This message
-  -f|--file: Where to persist VMs (required argument)
-''' % str(self.__class__))
+        return group
 
-    def setup(self, args):
+    def setup(self, options):
         import shelve
 
-        fname = None
+        if not options.filename:
+            raise ValueError("Filename is required when using the File backend")
 
-        try:
-            opts, args = getopt.gnu_getopt(shlex.split(args), 'hf:', ['--help', '--file='])
-            for o, a in opts:
-                if o in ['-h', '--help']:
-                    self.usage()
-                    sys.exit(0)
-                elif o in ['-f', '--file']:
-                    fname = a
-                else:
-                    assert False, 'unhandled option'
-        except getopt.GetoptError, err:
-            print str(err)
-            self.usage()
-            sys.exit(2)
-
-        if not fname:
-            self.usage()
-            sys.exit(2)
-
-        self.shelf = shelve.open(fname)
+        self.shelf = shelve.open(options.filename)
 
     def vm_hook(self, uuid, name, port):
         self.shelf[uuid] = { P_UUID : uuid, P_NAME : name, P_PORT : port }
@@ -397,12 +380,10 @@ class vSPCBackendLogging(vSPCBackendMemory):
     """
     I'm a backend for vSPC.py that logs VM messages to a file or files.
     """
-    def setup(self, args):
-        parsed_args = self.parse_args(args)
-
-        self.logdir = parsed_args.logdir
-        self.prefix = parsed_args.prefix
-        self.mode  = parsed_args.mode
+    def setup(self, options):
+        self.logdir = options.logdir
+        self.prefix = options.prefix
+        self.mode  = options.mode
         # uuid => filehandle
         self.logfiles = {}
 
@@ -415,7 +396,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
         # uuid => string of scrollback
         self.scrollback = {}
         # How many scrollback lines to keep for each VM.
-        self.scrollback_limit = parsed_args.context
+        self.scrollback_limit = options.context
 
     def add_scrollback(self, uuid, msg):
         msgs = self.scrollback.setdefault(uuid, "")
@@ -441,24 +422,24 @@ class vSPCBackendLogging(vSPCBackendMemory):
             # again, it should go through, so just do that.
             return self.vm_msg_hook(uuid, name, msg)
 
-    def parse_args(self, args):
+    def get_option_group(self, parser):
+        group = optparse.OptionGroup(parser, "Logging backend options")
+
         # XXX: Annoying; it would be nicer if OptionParser would print
         # out a more verbose message upon encountering unrecognized
         # arguments
         u = "%prog ...--backend-args='[ [ (-l | --logdir) logdir ] [ (-p | --prefix) prefix ] [ (-m | --mode) mode ]'"
-        parser = optparse.OptionParser(usage=u)
-        parser.add_option("-l", "--logdir", type='string',
-                          action='store', default="/var/log/consoles",
-                          help='Directory in which log files are written')
-        parser.add_option("-p", "--prefix", default='', type='string',
-                          help="First part of log file names")
-        parser.add_option("--context", type='int', action='store', default=200,
-                          help="Number of VM messages to keep as context for new connections")
-        parser.add_option("-m", "--mode", default='0600', type='string',
-                          help="Mode for new logs (default 0600)")
-        args_list = shlex.split(args)
-        (options, args) = parser.parse_args(args_list)
-        return options
+        group.add_option("-l", "--logdir", type='string',
+                         action='store', default="/var/log/consoles",
+                         help='Directory in which log files are written')
+        group.add_option("-p", "--prefix", default='', type='string',
+                         help="First part of log file names")
+        group.add_option("--context", type='int', action='store', default=200,
+                         help="Number of VM messages to keep as context for new connections")
+        group.add_option("-m", "--mode", default='0600', type='string',
+                         help="Mode for new logs (default 0600)")
+
+        return group
 
     def file_for_vm(self, name, uuid):
         if uuid not in self.logfiles:

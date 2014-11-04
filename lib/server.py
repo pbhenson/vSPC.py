@@ -170,7 +170,6 @@ class vSPC(Poller, VMExtHandler):
             self.stamp_orphan(self.vms[vt.uuid])
         else:
             logging.debug('unidentified VM socket closed')
-        self.delete_stream(vt)
         vt.close()
 
     def new_vm_data(self, vt):
@@ -229,7 +228,6 @@ class vSPC(Poller, VMExtHandler):
         if client in self.vms[client.uuid].clients:
             self.vms[client.uuid].clients.remove(client)
             self.stamp_orphan(self.vms[client.uuid])
-        self.delete_stream(client)
         self.backend.notify_client_del(client.sock, client.uuid)
 
     def new_client_data(self, client):

@@ -33,7 +33,7 @@ import getopt
 import logging
 import optparse
 import os
-import pickle
+import cPickle as pickle
 import signal
 import string
 import sys

@@ -32,7 +32,7 @@
 import fcntl
 import logging
 import os
-import pickle
+import cPickle as pickle
 import socket
 import sys
 import termios

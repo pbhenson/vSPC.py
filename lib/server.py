@@ -161,8 +161,8 @@ class vSPC(Poller, VMExtHandler):
         self.add_reader(client, self.queue_new_client_data)
         vm.clients.append(client)
 
-        logging.debug('uuid %s new client, %d active clients'
-                      % (client.uuid, len(vm.clients)))
+        logging.debug('uuid %s new client, %d active clients',
+                      client.uuid, len(vm.clients))
 
     def queue_new_client_connection(self, vm):
         sock = vm.listener.accept()[0]
@@ -170,7 +170,7 @@ class vSPC(Poller, VMExtHandler):
 
     def abort_vm_connection(self, vt):
         if vt.uuid and vt in self.vms[vt.uuid].vts:
-            logging.debug('uuid %s VM socket closed' % vt.uuid)
+            logging.debug('uuid %s VM socket closed', vt.uuid)
             self.vms[vt.uuid].vts.remove(vt)
             self.stamp_orphan(self.vms[vt.uuid])
         else:
@@ -210,7 +210,7 @@ class vSPC(Poller, VMExtHandler):
             self.add_reader(vt, self.queue_new_vm_data)
             return
 
-        # logging.debug('new_vm_data %s: %s' % (vt.uuid, repr(s)))
+        # logging.debug('new_vm_data %s: %s', vt.uuid, repr(s))
         self.backend.notify_vm_msg(vt.uuid, vt.name, s)
 
         clients = self.vms[vt.uuid].clients[:]
@@ -218,7 +218,7 @@ class vSPC(Poller, VMExtHandler):
             try:
                 self.send_buffered(cl, s)
             except (EOFError, IOError, socket.error), e:
-                logging.debug('cl.socket send error: %s' % (str(e)))
+                logging.debug('cl.socket send error: %s', str(e))
                 self.abort_client_connection(cl)
         self.add_reader(vt, self.queue_new_vm_data)
 
@@ -228,8 +228,8 @@ class vSPC(Poller, VMExtHandler):
         self.task_queue.put(lambda: self.new_vm_data(vt))
 
     def abort_client_connection(self, client):
-        logging.debug('uuid %s client socket closed, %d active clients' %
-                      (client.uuid, len(self.vms[client.uuid].clients)-1))
+        logging.debug('uuid %s client socket closed, %d active clients',
+                      client.uuid, len(self.vms[client.uuid].clients)-1)
         if client in self.vms[client.uuid].clients:
             self.vms[client.uuid].clients.remove(client)
             self.stamp_orphan(self.vms[client.uuid])
@@ -263,13 +263,13 @@ class vSPC(Poller, VMExtHandler):
             self.add_reader(client, self.queue_new_client_data)
             return
 
-        # logging.debug('new_client_data %s: %s' % (client.uuid, repr(s)))
+        # logging.debug('new_client_data %s: %s', client.uuid, repr(s))
 
         for vt in self.vms[client.uuid].vts:
             try:
                 self.send_buffered(vt, s)
             except (EOFError, IOError, socket.error), e:
-                logging.debug('cl.socket send error: %s' % (str(e)))
+                logging.debug('cl.socket send error: %s', str(e))
         self.add_reader(client, self.queue_new_client_data)
 
     def queue_new_client_data(self, client):
@@ -287,9 +287,9 @@ class vSPC(Poller, VMExtHandler):
         if not port:
             self.backend.notify_vm(vm.uuid, vm.name, vm.port)
 
-        logging.debug('%s:%s connected' % (vm.uuid, repr(vm.name)))
+        logging.debug('%s:%s connected', vm.uuid, repr(vm.name))
         if vm.port is not None:
-            logging.debug("listening on port %d" % vm.port)
+            logging.debug("listening on port %d", vm.port)
 
         # The clock is always ticking
         self.stamp_orphan(vm)
@@ -314,8 +314,8 @@ class vSPC(Poller, VMExtHandler):
         vm = self.vms[vt.uuid]
         vm.vts.append(vt)
 
-        logging.debug('uuid %s VM reconnect, %d active' %
-                      (vm.uuid, len(vm.vts)))
+        logging.debug('uuid %s VM reconnect, %d active',
+                      vm.uuid, len(vm.vts))
 
     def handle_vm_name(self, vt):
         if not self.vms.has_key(vt.uuid):
@@ -343,17 +343,17 @@ class vSPC(Poller, VMExtHandler):
 
     def handle_vmotion_peer(self, vt, data):
         if not self.vmotions.has_key(data):
-            logging.debug('peer cookie %s doesn\'t exist' % hexdump(data))
+            logging.debug('peer cookie %s doesn\'t exist', hexdump(data))
             return False
 
-        logging.debug('peer cookie %s maps to uuid %s' %
-                      (hexdump(data), self.vmotions[data]))
+        logging.debug('peer cookie %s maps to uuid %s',
+                      hexdump(data), self.vmotions[data])
 
         peer_uuid = self.vmotions[data]
         if vt.uuid:
             vm = self.vms[vt.uuid]
             if vm.uuid != peer_uuid:
-                logging.debug('peer uuid %s != other uuid %s' % hexdump(data))
+                logging.debug('peer uuid %s != other uuid %s', hexdump(data))
                 return False
             return True # vt already in place
         else:
@@ -364,13 +364,13 @@ class vSPC(Poller, VMExtHandler):
         return True
 
     def handle_vmotion_complete(self, vt):
-        logging.debug('uuid %s vmotion complete' % vt.uuid)
+        logging.debug('uuid %s vmotion complete', vt.uuid)
         vm = self.vms[vt.uuid]
         del self.vmotions[vm.vmotion]
         vm.vmotion = None
 
     def handle_vmotion_abort(self, vt):
-        logging.debug('uuid %s vmotion abort' % vt.uuid)
+        logging.debug('uuid %s vmotion abort', vt.uuid)
         vm = self.vms[vt.uuid]
         if vm.vmotion:
             del self.vmotions[vm.vmotion]
@@ -402,8 +402,8 @@ class vSPC(Poller, VMExtHandler):
             self.add_reader(client, self.queue_new_client_data)
         vm.clients.append(client)
 
-        logging.debug('uuid %s new client, %d active clients'
-                      % (client.uuid, len(vm.clients)))
+        logging.debug('uuid %s new client, %d active clients',
+                      client.uuid, len(vm.clients))
 
     def queue_new_admin_client_connection(self, sock, uuid, readonly):
         self.task_queue.put(lambda: self.new_admin_client_connection(sock, uuid, readonly))
@@ -424,9 +424,9 @@ class vSPC(Poller, VMExtHandler):
             elif vm.last_time + self.vm_expire_time > t:
                 continue
 
-            logging.debug('expired VM with uuid %s' % uuid)
+            logging.debug('expired VM with uuid %s', uuid)
             if vm.port is not None:
-                logging.debug(", port %d" % vm.port)
+                logging.debug(", port %d", vm.port)
             self.backend.notify_vm_del(vm.uuid)
 
             self.delete_stream(vm)
@@ -467,10 +467,12 @@ class vSPC(Poller, VMExtHandler):
             self.new_vm(uuid = vm.uuid, name = vm.name, port = vm.port)
 
     def run(self):
-        logging.info('Starting vSPC on proxy iface %s port %d, admin iface %s port %d' %
-                     (self.proxy_iface, self.proxy_port, self.admin_iface, self.admin_port))
+        logging.info('Starting vSPC on proxy iface %s port %d, admin iface %s '
+                     'port %d', self.proxy_iface, self.proxy_port,
+                     self.admin_iface, self.admin_port)
         if self.vm_port_next is not None:
-            logging.info("Allocating VM ports starting at %d on interface %s" % (self.vm_port_next, self.vm_iface) )
+            logging.info("Allocating VM ports starting at %d on interface %s",
+                         self.vm_port_next, self.vm_iface)
 
         self.create_old_vms(self.backend.get_observed_vms())
 

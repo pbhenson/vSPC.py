@@ -51,11 +51,11 @@ import logging
 
 class vSPCBackendSample(vSPCBackendMemory):
     def vm_hook(self, uuid, name, port):
-        logging.debug("sample vm_hook: uuid: %s, name: %s, port: %s" %
-                      (uuid, name, port))
+        logging.debug("sample vm_hook: uuid: %s, name: %s, port: %s",
+                      uuid, name, port)
 
     def vm_del_hook(self, uuid):
-        logging.debug("sample vm_del_hook: uuid: %s" % uuid)
+        logging.debug("sample vm_del_hook: uuid: %s", uuid)
 
 
 

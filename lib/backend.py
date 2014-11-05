@@ -149,21 +149,21 @@ class vSPCBackendMemory:
         self.hook_queue.put(lambda: self.vm_hook(*data))
 
     def vm_hook(self, uuid, name, port):
-        logging.debug("vm_hook: uuid: %s, name: %s, port: %s" %
-                      (uuid, name, port))
+        logging.debug("vm_hook: uuid: %s, name: %s, port: %s",
+                      uuid, name, port)
 
     def notify_vm_msg(self, uuid, name, s):
         self.hook_queue.put(lambda: self.vm_msg_hook(uuid, name, s))
 
     def vm_msg_hook(self, uuid, name, s):
-        logging.debug("vm_msg_hook: uuid: %s, name: %s, msg: %s" %
-                      (uuid, name, s))
+        logging.debug("vm_msg_hook: uuid: %s, name: %s, msg: %s",
+                      uuid, name, s)
 
     def notify_client_del(self, sock, uuid):
         self.hook_queue.put(lambda: self.client_del(sock, uuid))
 
     def client_del(self, sock, uuid):
-        logging.debug("client_del: uuid %s, client %s" % (uuid, sock))
+        logging.debug("client_del: uuid %s, client %s", uuid, sock)
         vm = None
         with self.observed_vms_lock:
             if uuid in self.observed_vms: vm = self.observed_vms[uuid]
@@ -182,7 +182,7 @@ class vSPCBackendMemory:
         self.hook_queue.put(lambda: self.vm_del_hook(uuid))
 
     def vm_del_hook(self, uuid):
-        logging.debug("vm_del_hook: uuid: %s" % uuid)
+        logging.debug("vm_del_hook: uuid: %s", uuid)
 
     def notify_query_socket(self, sock, vspc):
         self.admin_queue.put(lambda: self.handle_query_socket(sock, vspc))
@@ -245,7 +245,7 @@ class vSPCBackendMemory:
                 pickle.dump(Exception('No common version'), sockfile)
             sockfile.flush()
         except Exception, e:
-            logging.debug('handle_query_socket exception: %s' % str(e))
+            logging.debug('handle_query_socket exception: %s', str(e))
 
     def format_vm_listing(self):
         vms = self.get_observed_vms()
@@ -287,7 +287,7 @@ class vSPCBackendMemory:
 
         Callers are assumed to hold the modification lock of the vm argument.
         """
-        logging.debug("Trying to lock vm %s for client" % vm.name)
+        logging.debug("Trying to lock vm %s for client", vm.name)
         if lock_mode == Q_LOCK_EXCL:
             logging.debug("Exclusive lock mode selected")
             if vm.lock.acquire(False):
@@ -386,21 +386,32 @@ class vSPCBackendLogging(vSPCBackendMemory):
     """
     I'm a backend for vSPC.py that logs VM messages to a file or files.
     """
-    def setup(self, options):
-        self.logdir = options.logdir
-        self.prefix = options.prefix
-        self.mode  = options.mode
+    def __init__(self):
+        self.logdir = "/var/log/consoles"
+        self.prefix = ""
+        self.mode = "0600"
+
         # uuid => filehandle
         self.logfiles = {}
 
         # uuid => name
         self.vm_names = {}
 
+        # uuid => string of scrollback
+        self.scrollback = {}
+        self.scrollback_limit = 200
+
+
+    def setup(self, args):
+        parsed_args = self.parse_args(args)
+
+        self.logdir = parsed_args.logdir
+        self.prefix = parsed_args.prefix
+        self.mode  = parsed_args.mode
+
         # register for SIGHUP, so we know when to reload logfiles.
         signal.signal(signal.SIGHUP, self.handle_sighup)
 
-        # uuid => string of scrollback
-        self.scrollback = {}
         # How many scrollback lines to keep for each VM.
         self.scrollback_limit = options.context
 

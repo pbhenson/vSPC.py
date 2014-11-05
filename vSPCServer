@@ -29,7 +29,7 @@ import logging
 import os
 import sys
 
-from optparse import OptionParser, OptionValueError
+from optparse import OptionParser
 
 from vSPC.server import vSPC
 from vSPC.backend import vSPCBackendMemory, vSPCBackendFile, vSPCBackendLogging
@@ -106,7 +106,7 @@ def get_backend_type(shortname):
 
     return backend_type
 
-if __name__=="__main__":
+def main():
     # pull out any specified backend so we can provide usage statements
     # XXX this is a pseudo-hack
     backend_type = "Memory"
@@ -207,8 +207,11 @@ if __name__=="__main__":
     except KeyboardInterrupt:
         logging.info("Shutdown requested on keyboard, exiting")
         backend.shutdown()
-        sys.exit(0)
+        return 0
     except Exception, e:
         logging.exception("Top level exception caught")
         backend.shutdown()
-        sys.exit(1)
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main())

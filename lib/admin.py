@@ -35,9 +35,8 @@ import os
 import cPickle as pickle
 import socket
 import sys
-import termios
 
-from telnetlib import BINARY, ECHO, SGA
+from telnetlib import BINARY, SGA
 
 from telnet import TelnetServer
 from poll import Poller

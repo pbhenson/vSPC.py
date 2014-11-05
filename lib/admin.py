@@ -29,15 +29,11 @@
 # authors and should not be interpreted as representing official policies, either expressed
 # or implied, of <copyright holder>.
 
-import fcntl
-import logging
-import os
 import pickle
 import socket
 import sys
-import termios
 
-from telnetlib import BINARY, ECHO, SGA
+from telnetlib import BINARY, SGA
 
 from telnet import TelnetServer
 from poll import Poller

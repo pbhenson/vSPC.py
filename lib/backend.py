@@ -397,23 +397,32 @@ class vSPCBackendLogging(vSPCBackendMemory):
     """
     I'm a backend for vSPC.py that logs VM messages to a file or files.
     """
-    def setup(self, args):
-        parsed_args = self.parse_args(args)
+    def __init__(self):
+        self.logdir = "/var/log/consoles"
+        self.prefix = ""
+        self.mode = "0600"
 
-        self.logdir = parsed_args.logdir
-        self.prefix = parsed_args.prefix
-        self.mode  = parsed_args.mode
         # uuid => filehandle
         self.logfiles = {}
 
         # uuid => name
         self.vm_names = {}
 
+        # uuid => string of scrollback
+        self.scrollback = {}
+        self.scrollback_limit = 200
+
+
+    def setup(self, args):
+        parsed_args = self.parse_args(args)
+
+        self.logdir = parsed_args.logdir
+        self.prefix = parsed_args.prefix
+        self.mode  = parsed_args.mode
+
         # register for SIGHUP, so we know when to reload logfiles.
         signal.signal(signal.SIGHUP, self.handle_sighup)
 
-        # uuid => string of scrollback
-        self.scrollback = {}
         # How many scrollback lines to keep for each VM.
         self.scrollback_limit = parsed_args.context
 

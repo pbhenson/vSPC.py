@@ -42,7 +42,7 @@ import Queue
 
 from telnetlib import BINARY, SGA, ECHO
 
-from vSPC.poll import Poller, Selector
+from vSPC.poll import Poller
 from vSPC.telnet import TelnetServer, VMTelnetServer, VMExtHandler, hexdump
 
 LISTEN_BACKLOG = 5
@@ -52,7 +52,7 @@ def openport(port, iface="", use_ssl=False, ssl_cert=None, ssl_key=None):
     if use_ssl:
         sock = ssl.wrap_socket(sock, keyfile=ssl_key, certfile=ssl_cert)
     sock.setblocking(0)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1);
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind((iface, port))
     sock.listen(LISTEN_BACKLOG)
     return sock
@@ -87,8 +87,8 @@ class vSPC(Poller, VMExtHandler):
         self.proxy_port = proxy_port
         self.admin_port = admin_port
         self.vm_iface = vm_iface
-        self.proxy_iface = proxy_iface;
-        self.admin_iface = admin_iface;
+        self.proxy_iface = proxy_iface
+        self.admin_iface = admin_iface
         if not vm_port_start: # account for falsey things, not just None
             vm_port_start = None
         self.vm_port_next = vm_port_start

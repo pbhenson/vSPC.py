@@ -52,7 +52,7 @@ def check_lock_mode(option, opt_str, value, parser):
             assert client_lock_mode == "free-for-all-fallback"
             parser.values.client_lock_mode = Q_LOCK_FFAR
 
-if __name__ == '__main__':
+def main():
     parser = OptionParser(usage="usage: %prog [options] [vm_name]",
                           description="Connect to the admin port of a running vSPC "
                                       "server. With no vm, this prints a list of VMs known to the "
@@ -91,4 +91,8 @@ if __name__ == '__main__':
     if len(args) == 1:
         vm_name = args[0]
 
-    sys.exit(do_query(options.remote_host, options.admin_port, vm_name, options.client_lock_mode))
+    return do_query(options.remote_host, options.admin_port, vm_name,
+                    options.client_lock_mode)
+
+if __name__ == '__main__':
+    sys.exit(main())

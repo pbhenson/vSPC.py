@@ -207,28 +207,20 @@ class Poller:
             raise
 
         for (fileno, event) in events:
-            logging.debug("epoll: fileno: %s, event %s", fileno, event)
             if event & select.EPOLLIN:
                 # read event
-                logging.debug("EPOLLIN")
                 with self.lock:
                     pes = self.event_sources_by_fileno[fileno]
                     handler = pes.read_handler
                 handler(pes.stream)
             elif event & select.EPOLLOUT:
                 # write event
-                logging.debug("EPOLLOUT")
                 with self.lock:
                     pes = self.event_sources_by_fileno[fileno]
                     handler = pes.write_handler
                 handler(pes.stream)
-            elif event & select.EPOLLERR:
-                # how do we want to handle error conditions?
-                logging.debug("EPOLLERR")
-                pass
-            elif event & select.EPOLLHUP:
-                # disconnect
-                logging.debug("EPOLLHUP")
+            elif event & select.EPOLLERR or event & select.EPOLLHUP:
+                # error or disconnect
                 with self.lock:
                     pes = self.event_sources_by_fileno[fileno]
                     fd = pes.stream

@@ -135,8 +135,13 @@ class vSPC(Poller, VMExtHandler):
     def new_vm_connection(self, sock):
         sock.setblocking(0)
         sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
-        vt = VMTelnetServer(sock, handler = self)
-        self.add_reader(vt, self.queue_new_vm_data)
+        try:
+            vt = VMTelnetServer(sock, handler = self)
+            self.add_reader(vt, self.queue_new_vm_data)
+        except socket.error, err:
+            # If there was a socket error on initialization, capture the
+            # exception to avoid logging a traceback.
+            logging.debug("uninitialized VM socket error")
 
     def queue_new_vm_connection(self, listener):
         try:

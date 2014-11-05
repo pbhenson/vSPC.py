@@ -86,12 +86,22 @@ def get_backend_type(shortname):
     if globals().has_key(name):
         backend_type = globals()[name]
     else:
+        # Try importing assuming that PYTHONPATH has been set.
         try:
             module = __import__(name)
         except ImportError:
-            print "No builtin backend type %s found, no appropriate class " \
-                "file found (looking for %s.py)" % (shortname, name)
-            sys.exit(1)
+            # Try importing the backend assuming it has been placed in with
+            # the vSPC libraries.
+            try:
+                module_name = "vSPC.%s" % name
+                __import__(module_name)
+                module = sys.modules[module_name]
+            except ImportError:
+                print "No built-in backend type '%s' found. Error trying to " \
+                    "import backend (looking for %s.py). Either the module " \
+                    "wasn't on your PYTHONPATH or, if it was, there was an " \
+                    "error in the backend file." % (shortname, name)
+                sys.exit(1)
 
         try:
             backend_type = getattr(module, name)

@@ -29,9 +29,6 @@
 # authors and should not be interpreted as representing official policies, either expressed
 # or implied, of <copyright holder>.
 
-import fcntl
-import logging
-import os
 import cPickle as pickle
 import socket
 import sys

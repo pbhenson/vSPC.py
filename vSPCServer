@@ -81,11 +81,6 @@ def daemonize():
     os.chdir('/')
     os.umask(0)
 
-def handle_persist_file(option, opt_str, value, parser):
-    import pipes
-    parser.values.backend_type_name = "File"
-    parser.values.backend_args = "-f %s" % pipes.quote(value)
-
 def get_backend_type(shortname):
     name = "vSPCBackend" + shortname
     if globals().has_key(name):

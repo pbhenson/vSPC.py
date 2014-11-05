@@ -33,7 +33,7 @@ import pickle
 import socket
 import sys
 
-from telnetlib import BINARY, ECHO, SGA
+from telnetlib import BINARY, SGA
 
 from telnet import TelnetServer
 from poll import Poller

@@ -1,8 +1,9 @@
 This is a fork of the vSPC.py project [1]. Most of vSPC.py, as you can
-see, was written by Zach Loafman. I made this temporary repository to
-hold some changes I made to vSPC.py until they get accepted upstream.
-These changes include SSL support for connections between ESX hosts and
-vSPC.py, console activity logging, and some other minor improvements.
+see, was written by Zach Loafman at EMC Isilon. This repository includes
+all active development and should be considered authoritative.
+Changes introduced since the fork include SSL support for connections
+between ESX hosts and vSPC.py, console activity logging, and some other
+minor improvements.
 
 ## Requirements ##
 
@@ -90,14 +91,11 @@ whatever.
 By default, vSPCServer uses the "Memory" backend, which really just
 means that no initial mappings are loaded on startup and all state is
 retained in memory alone. The other builtin backend is the "File"
-backend, which can be configured like so: --backend File --backend-args
-'-f /tmp/vSPC'.  As a convenience, this same configuration can be
-accomplished using the top level parameter -f or --persist-file, i.e.
-'-f /tmp/vSPC' is synonymous with the previous set of arguments.
+backend, which can be configured like so: --backend File -f /tmp/vSPC.
 
 If '--backend Foo' is given but no builtin backend Foo exists, vSPC.py
 tries to import module vSPCBackendFoo, looking for class vSPCBackendFoo.
-See --backend-help for programming details.
+Use --help with the desired --backend for help using that backend.
 
 ## Building the distribution ##
 

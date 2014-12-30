@@ -175,10 +175,12 @@ class vSPC(Poller, VMExtHandler):
         self.task_queue.put(lambda: self.new_client_connection(sock, vm))
 
     def abort_vm_connection(self, vt):
-        if vt.uuid and vt in self.vms[vt.uuid].vts:
+        if vt.uuid:
             logging.debug('uuid %s VM socket closed', vt.uuid)
-            self.vms[vt.uuid].vts.remove(vt)
-            self.stamp_orphan(self.vms[vt.uuid])
+            if vt.uuid in self.vms:
+                if vt in self.vms[vt.uuid].vts:
+                    self.vms[vt.uuid].vts.remove(vt)
+                self.stamp_orphan(self.vms[vt.uuid])
         else:
             logging.debug('unidentified VM socket closed')
         vt.close()

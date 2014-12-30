@@ -155,8 +155,14 @@ class vSPC(Poller, VMExtHandler):
         sock.setblocking(0)
         sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
 
-        client = self.Client(sock)
-        client.uuid = vm.uuid
+        try:
+            client = self.Client(sock)
+            client.uuid = vm.uuid
+        except socket.error, err:
+            # If there was a socket error on initialization, capture the
+            # exception to avoid logging a traceback.
+            logging.debug("uninitialized client socket error")
+            return
 
         self.add_reader(client, self.queue_new_client_data)
         vm.clients.append(client)

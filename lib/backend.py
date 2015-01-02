@@ -170,6 +170,7 @@ class vSPCBackendMemory:
         if vm is not None:
             with vm.modification_lock:
                 self.maybe_unlock_vm(vm, sock.fileno())
+        sock.close()
 
     def notify_vm_del(self, uuid):
         self.observer_queue.put(lambda: self.vm_del(uuid))

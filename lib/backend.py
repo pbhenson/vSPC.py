@@ -35,6 +35,7 @@ import optparse
 import os
 import cPickle as pickle
 import signal
+import socket
 import string
 import sys
 import threading
@@ -167,10 +168,16 @@ class vSPCBackendMemory:
         vm = None
         with self.observed_vms_lock:
             if uuid in self.observed_vms: vm = self.observed_vms[uuid]
-        if vm is not None:
-            with vm.modification_lock:
-                self.maybe_unlock_vm(vm, sock.fileno())
-        sock.close()
+
+        # socket manipulations may fail if there was no socket successfully
+        # created but we're still doing client cleanup
+        try:
+            if vm is not None:
+                with vm.modification_lock:
+                    self.maybe_unlock_vm(vm, sock.fileno())
+            sock.close()
+        except socket.error:
+            pass
 
     def notify_vm_del(self, uuid):
         self.observer_queue.put(lambda: self.vm_del(uuid))

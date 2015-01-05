@@ -509,14 +509,14 @@ class vSPC(Poller, VMExtHandler):
         connection_overage = (self._count_open_connections() -
                               self.open_conns_soft_limit)
         if connection_overage > 0:
-            # TODO: change to warn
-            logging.error("Number of open connections (%d) is above "
+            logging.warn("Number of open connections (%d) is above "
                     "soft limit (%d). Expiring oldest orphans until "
                     "under that limit.", self._count_open_connections(),
                     self.open_conns_soft_limit)
 
             orphans = self.orphans[:]
-            orphans.sort(key=lambda uuid: self.vms[uuid].last_time, reverse=True)
+            orphans.sort(key=lambda uuid: self.vms[uuid].last_time,
+                         reverse=True)
             for index in xrange(min(connection_overage, len(orphans))):
                 uuid = orphans[index]
                 vm = self.vms[uuid]

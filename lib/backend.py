@@ -402,12 +402,10 @@ class vSPCBackendLogging(vSPCBackendMemory):
         self.scrollback_limit = 200
 
 
-    def setup(self, args):
-        parsed_args = self.parse_args(args)
-
-        self.logdir = parsed_args.logdir
-        self.prefix = parsed_args.prefix
-        self.mode  = parsed_args.mode
+    def setup(self, options):
+        self.logdir = options.logdir
+        self.prefix = options.prefix
+        self.mode  = options.mode
 
         # register for SIGHUP, so we know when to reload logfiles.
         signal.signal(signal.SIGHUP, self.handle_sighup)

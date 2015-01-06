@@ -34,6 +34,7 @@ __copyright__ = "Copyright (C) 2011 Isilon Systems LLC."
 __revision__ = "$Id$"
 
 import logging
+import resource
 import socket
 import ssl
 import time
@@ -106,6 +107,23 @@ class vSPC(Poller, VMExtHandler):
         self.task_queue = Queue.Queue()
         self.task_queue_threads = []
 
+        # raise the open files soft limit up to the hard limit to maximize
+        # the number of open connections this process can have open
+        (_, open_files_limit) = resource.getrlimit(resource.RLIMIT_NOFILE)
+        logging.debug("Setting open files soft limit to %d", open_files_limit)
+        resource.setrlimit(resource.RLIMIT_NOFILE,
+                (open_files_limit, open_files_limit))
+
+        # create an internal hard limit we want to stay below; the number of
+        # open files used by this process is more than just the connections
+        # so we build in a bit of buffer
+        self.open_conns_hard_limit = open_files_limit - 64
+        # set a soft limit above which we'll start collecting orphans before
+        # their expire time (75% of hard limit)
+        self.open_conns_soft_limit = int(self.open_conns_hard_limit * 0.75)
+        logging.debug("Connection limits: soft: %d; hard: %d",
+                      self.open_conns_soft_limit, self.open_conns_hard_limit)
+
     def _queue_run(self, queue):
         while True:
             try:
@@ -132,6 +150,37 @@ class vSPC(Poller, VMExtHandler):
         else:
             self.del_writer(ts)
 
+    def _count_open_connections(self):
+        '''
+        Return the total number of open connections.
+        '''
+
+        vm_connections = len(self.vms)
+        client_connections = 0
+        for uuid in self.vms:
+            vm = self.vms[uuid]
+            client_connections += len(vm.clients)
+
+        logging.debug("Current open connection count: "
+                "%d vms (%d orphans), %d clients", vm_connections,
+                len(self.orphans), client_connections)
+
+        return (vm_connections + client_connections)
+
+
+    def _can_accept_more_connections(self):
+        '''
+        Evaluate if this process can accept more connections given its
+        limit on the open number of files and how many connections
+        it currently has open. This is to prevent the primary process
+        from dying due to attempting to exceed this limit.
+        '''
+
+        if self._count_open_connections() >= self.open_conns_hard_limit:
+            return False
+
+        return True
+
     def new_vm_connection(self, sock):
         sock.setblocking(0)
         sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
@@ -147,6 +196,12 @@ class vSPC(Poller, VMExtHandler):
         try:
             sock = listener.accept()[0]
         except ssl.SSLError:
+            return
+
+        if not self._can_accept_more_connections():
+            logging.error("Maximum number of connections reached, refusing "
+                "incoming VM connection")
+            sock.close()
             return
 
         self.task_queue.put(lambda: self.new_vm_connection(sock))
@@ -172,6 +227,13 @@ class vSPC(Poller, VMExtHandler):
 
     def queue_new_client_connection(self, vm):
         sock = vm.listener.accept()[0]
+
+        if not self._can_accept_more_connections():
+            logging.error("Maximum number of connections reached, refusing "
+                "incoming client connection")
+            sock.close()
+            return
+
         self.task_queue.put(lambda: self.new_client_connection(sock, vm))
 
     def abort_vm_connection(self, vt):
@@ -361,7 +423,8 @@ class vSPC(Poller, VMExtHandler):
         if vt.uuid:
             vm = self.vms[vt.uuid]
             if vm.uuid != peer_uuid:
-                logging.debug('peer uuid %s != other uuid %s', hexdump(data))
+                logging.debug('peer uuid %s != other uuid %s',
+                              vm.uuid, peer_uuid)
                 return False
             return True # vt already in place
         else:
@@ -398,6 +461,13 @@ class vSPC(Poller, VMExtHandler):
 
     def queue_new_admin_connection(self, listener):
         sock = listener.accept()[0]
+
+        if not self._can_accept_more_connections():
+            logging.error("Maximum number of connections reached, refusing "
+                "incoming admin connection")
+            sock.close()
+            return
+
         self.task_queue.put(lambda: self.new_admin_connection(sock))
 
     def new_admin_client_connection(self, sock, uuid, readonly):
@@ -432,21 +502,45 @@ class vSPC(Poller, VMExtHandler):
             elif vm.last_time + self.vm_expire_time > t:
                 continue
 
-            logging.debug('expired VM with uuid %s', uuid)
-            if vm.port is not None:
-                logging.debug(", port %d", vm.port)
-            self.backend.notify_vm_del(vm.uuid)
+            self.expire_orphan(vm)
 
-            self.delete_stream(vm)
-            del vm.listener
-            if self.vm_port_next is not None:
-                self.vm_port_next = min(vm.port, self.vm_port_next)
-                del self.ports[vm.port]
-            del self.vms[uuid]
-            if vm.vmotion:
-                del self.vmotions[vm.vmotion]
-                vm.vmotion = None
-            del vm
+        # if the number of connections is above our soft limit and we have
+        # orphans, collect enough to drop it below that limit, oldest first
+        connection_overage = (self._count_open_connections() -
+                              self.open_conns_soft_limit)
+        if connection_overage > 0:
+            logging.warn("Number of open connections (%d) is above "
+                    "soft limit (%d). Expiring oldest orphans until "
+                    "under that limit.", self._count_open_connections(),
+                    self.open_conns_soft_limit)
+
+            orphans = self.orphans[:]
+            orphans.sort(key=lambda uuid: self.vms[uuid].last_time,
+                         reverse=True)
+            for index in xrange(min(connection_overage, len(orphans))):
+                uuid = orphans[index]
+                vm = self.vms[uuid]
+                self.expire_orphan(vm)
+
+    def expire_orphan(self, vm):
+        '''
+        Expire an orphan. Assumes the due-diligence has already been done
+        to confirm that vm is, indeed, an orphan.
+        '''
+
+        logging.debug('expired VM with uuid %s, port %s', vm.uuid, vm.port)
+        self.backend.notify_vm_del(vm.uuid)
+
+        self.delete_stream(vm)
+        del vm.listener
+        if self.vm_port_next is not None:
+            self.vm_port_next = min(vm.port, self.vm_port_next)
+            del self.ports[vm.port]
+        del self.vms[vm.uuid]
+        if vm.vmotion:
+            del self.vmotions[vm.vmotion]
+            vm.vmotion = None
+        del vm
 
     def open_vm_port(self, vm, port):
         self.collect_orphans()

@@ -222,8 +222,9 @@ class vSPC(Poller, VMExtHandler):
         self.add_reader(client, self.queue_new_client_data)
         vm.clients.append(client)
 
-        logging.debug('uuid %s new client, %d active clients',
-                      client.uuid, len(vm.clients))
+        logging.info('Client connected to %s (uuid %s), '
+                     '%d active clients to vm',
+                     vm.name, vm.uuid, len(vm.clients))
 
     def queue_new_client_connection(self, vm):
         sock = vm.listener.accept()[0]
@@ -238,13 +239,14 @@ class vSPC(Poller, VMExtHandler):
 
     def abort_vm_connection(self, vt):
         if vt.uuid:
-            logging.debug('uuid %s VM socket closed', vt.uuid)
+            logging.info('VM %s (uuid %s) disconnected',
+                         vt.name, vt.uuid)
             if vt.uuid in self.vms:
                 if vt in self.vms[vt.uuid].vts:
                     self.vms[vt.uuid].vts.remove(vt)
                 self.stamp_orphan(self.vms[vt.uuid])
         else:
-            logging.debug('unidentified VM socket closed')
+            logging.warn('Unidentified VM socket closed')
         vt.close()
 
     def new_vm_data(self, vt):
@@ -252,6 +254,8 @@ class vSPC(Poller, VMExtHandler):
         try:
             neg_done = vt.negotiation_done()
         except (EOFError, IOError, socket.error):
+            logging.warn('VM %s (uuid %s) experienced a socket error, '
+                         'closing socket', vt.name, vt.uuid)
             self.abort_vm_connection(vt)
             return
 
@@ -298,8 +302,10 @@ class vSPC(Poller, VMExtHandler):
         self.task_queue.put(lambda: self.new_vm_data(vt))
 
     def abort_client_connection(self, client):
-        logging.debug('uuid %s client socket closed, %d active clients',
-                      client.uuid, len(self.vms[client.uuid].clients)-1)
+        logging.info('Client disconnected from %s (uuid %s), %d active clients',
+                     self.vms[client.uuid].name,
+                     self.vms[client.uuid].uuid,
+                     len(self.vms[client.uuid].clients)-1)
         if client in self.vms[client.uuid].clients:
             self.vms[client.uuid].clients.remove(client)
             self.stamp_orphan(self.vms[client.uuid])
@@ -357,9 +363,8 @@ class vSPC(Poller, VMExtHandler):
         if not port:
             self.backend.notify_vm(vm.uuid, vm.name, vm.port)
 
-        logging.debug('%s:%s connected', vm.uuid, repr(vm.name))
-        if vm.port is not None:
-            logging.debug("listening on port %d", vm.port)
+        logging.info('VM %s (uuid %s) connected, listening on port %s',
+                     vm.name, vm.uuid, vm.port)
 
         # The clock is always ticking
         self.stamp_orphan(vm)
@@ -384,8 +389,8 @@ class vSPC(Poller, VMExtHandler):
         vm = self.vms[vt.uuid]
         vm.vts.append(vt)
 
-        logging.debug('uuid %s VM reconnect, %d active',
-                      vm.uuid, len(vm.vts))
+        logging.info('VM %s (uuid %s) reconnected (maybe vmotion), %d active',
+                      vm.name, vm.uuid, len(vm.vts))
 
     def handle_vm_name(self, vt):
         if not self.vms.has_key(vt.uuid):

@@ -222,8 +222,7 @@ class vSPC(Poller, VMExtHandler):
         self.add_reader(client, self.queue_new_client_data)
         vm.clients.append(client)
 
-        logging.info('Client connected to %s (uuid %s), '
-                     '%d active clients to vm',
+        logging.info('Client connected to %s (uuid %s), %d active clients',
                      vm.name, vm.uuid, len(vm.clients))
 
     def queue_new_client_connection(self, vm):
@@ -239,8 +238,7 @@ class vSPC(Poller, VMExtHandler):
 
     def abort_vm_connection(self, vt):
         if vt.uuid:
-            logging.info('VM %s (uuid %s) disconnected',
-                         vt.name, vt.uuid)
+            logging.info('VM %s (uuid %s) disconnected', vt.name, vt.uuid)
             if vt.uuid in self.vms:
                 if vt in self.vms[vt.uuid].vts:
                     self.vms[vt.uuid].vts.remove(vt)
@@ -389,8 +387,7 @@ class vSPC(Poller, VMExtHandler):
         vm = self.vms[vt.uuid]
         vm.vts.append(vt)
 
-        logging.info('VM %s (uuid %s) reconnected (maybe vmotion), %d active',
-                      vm.name, vm.uuid, len(vm.vts))
+        logging.info('VM %s (uuid %s) reconnected/vmotion', vm.name, vm.uuid)
 
     def handle_vm_name(self, vt):
         if not self.vms.has_key(vt.uuid):

@@ -157,9 +157,14 @@ class vSPC(Poller, VMExtHandler):
 
         vm_connections = len(self.vms)
         client_connections = 0
-        for uuid in self.vms:
-            vm = self.vms[uuid]
-            client_connections += len(vm.clients)
+        for uuid in self.vms.keys():
+            try:
+                vm = self.vms[uuid]
+                client_connections += len(vm.clients)
+            except KeyError:
+                # Other processes may be changing self.vms under us so don't
+                # die if the uuid doesn't exist when we get to it.
+                pass
 
         logging.debug("Current open connection count: "
                 "%d vms (%d orphans), %d clients", vm_connections,

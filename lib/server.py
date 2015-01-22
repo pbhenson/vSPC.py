@@ -163,7 +163,7 @@ class vSPC(Poller, VMExtHandler):
                 client_connections += len(vm.clients)
             except KeyError:
                 # Other processes may be changing self.vms under us so don't
-                # die if the uuid doesn't exist when we get to it.
+                # die if the vms record doesn't exist when we get to it.
                 pass
 
         logging.debug("Current open connection count: "

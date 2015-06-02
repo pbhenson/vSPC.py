@@ -1,20 +1,51 @@
-This is a fork of the vSPC.py project [1]. Most of vSPC.py, as you can
-see, was written by Zach Loafman at EMC Isilon. This repository includes
-all active development and should be considered authoritative.
-Changes introduced since the fork include SSL support for connections
-between ESX hosts and vSPC.py, console activity logging, and some other
-minor improvements.
+# Overview
 
-## Requirements ##
+vSPC.py is a Virtual Serial Port Concentrator (also known as a virtual
+serial port proxy) that makes use of the
+[VMware telnet extensions](http://www.vmware.com/support/developer/vc-sdk/visdk41pubs/vsp41_usingproxy_virtual_serial_ports.pdf).
+
+# Features
+
+- Point any number of virtual serial ports to a single vSPC.py server
+(great for cloned VMs)
+- Multiplexed client connects: Multiple entities can interact with the
+same console. Also allows for gdb connections while monitoring the console.
+- Port mappings are sticky - port number will stay constant as long as
+the VM or a client is connected, with a set expiration timer after all
+connections terminate
+- vMotion is fully supported
+- Query interface allows you to see VM name, UUID, port mappings on the
+vSPC.py server
+- Clients can connect using standard telnet, binary mode is negotiated
+automatically
+
+# Lineage
+
+This began as is a fork of the
+[vSPC.py project hosted at SourceForge](http://sourceforge.net/p/vspcpy/home/Home/)
+written by Zach Loafman while at EMC Isilon. It languished until it was
+forked by [Kevan Carstensen on github](https://github.com/isnotajoke) and
+extensively refactored and enhanced. Changes introduced since the SF fork
+include SSL support for connections between ESX hosts and vSPC.py, console
+activity logging, and some other minor improvements.
+
+Kevan's fork was re-forked by EMC Isilon to address bugs as we began using
+it heavily in our environment once more.
+
+# Requirements
 
 Python 2.5 or better is required, due to use of the 'with' statement and
-other syntax that was introduced in Python 2.5.
+other syntax that was introduced in Python 2.5. It's being developed against
+Python 2.6, however, since that's the currently-shipping version for
+RHEL/CentOS 6.
 
 Due to the use of epoll in the server implementation, Linux is required.
 There may be other issues associated with using vSPC.py on other OSs, as
 large parts of vSPC.py were only developed & tested on Linux.
 
-## Configuring VMs to connect to the concentrator ##
+VMWare ESXi 4.1 through 5.5 are supported.
+
+# Configuring VMs to connect to the concentrator
 
 In order to configure a VM to use the virtual serial port concentrator,
 you must be running ESXi 4.1+. You must also have a software license
@@ -41,7 +72,7 @@ which should specify telnets instead of telnet. For this to work
 correctly, you'll also need to launch the server with the --ssl, --cert,
 and possibly --key options.
 
-## Running the Concentrator ##
+# Running the Concentrator
 
 You run the concentrator through the vSPCServer program. The vSPCServer
 program is configurable with a number of options, documented below and
@@ -78,15 +109,15 @@ the VM is connected, and even after this condition is no longer met, the
 mapping is retained for --vm-expire-time seconds (default 24*3600, or
 one day).
 
-The backend of vSPCServer serves three major purposes: (a) On initial
-load, all port mappings are retrieved from the backend. The main thread
-maintains the port mappings after initial load, but the backend is
-responsible for setting the initial map. (This design was chosen to
-avoid blocking on the backend when a new VM connects.) (b) The backend
-serves all admin connections (because it has full knowledge of the
-mappings), (c) The backend can fire off customizable hooks as VMs come
-and go, allowing for persistence, or database tracking, or
-whatever.
+The backend of vSPCServer serves three major purposes:
+- On initial load, all port mappings are retrieved from the backend.
+The main thread maintains the port mappings after initial load, but the
+backend is responsible for setting the initial map. (This design was
+chosen to avoid blocking on the backend when a new VM connects.)
+- The backend serves all admin connections (because it has full knowledge
+of the mappings)
+- The backend can fire off customizable hooks as VMs come and go, allowing
+for persistence, or database tracking, or whatever.
 
 By default, vSPCServer uses the "Memory" backend, which really just
 means that no initial mappings are loaded on startup and all state is
@@ -97,23 +128,28 @@ If '--backend Foo' is given but no builtin backend Foo exists, vSPC.py
 tries to import module vSPCBackendFoo, looking for class vSPCBackendFoo.
 Use --help with the desired --backend for help using that backend.
 
-## Building the distribution ##
+# Building the distribution
 
-# source distribution #
+source distribution
+```
 /path/to/your/python setup.py sdist
+```
 
-# binary distribution #
+binary distribution
+```
 /path/to/your/python setup.py bdist
+```
 
-# build rpm
-# make source dist and then:
+build rpm
+```
+/path/to/your/python setup.py sdist
 rpmbuild -ta vSPC-<version>.tar.gz
+```
 
-## Authors ##
+# Authors
 
 - Zach Loafman (initial implementation)
 - Kevan Carstensen (SSL support, logging backend, lazy client connections to VMs, internal work necessary to support lazy connections to VMs)
 - Dave Johnson (fixes for missing getopt modules and missing shelf.sync() calls)
 - Fabien Wernli (add options to configure listen interface, fix broken -f option, packaging improvements)
-
-[1] http://sourceforge.net/p/vspcpy/home/Home/
+- Casey Peel (simplified backend argument parsing, fix connection leaks, and improved logging performance)

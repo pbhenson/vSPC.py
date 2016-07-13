@@ -207,22 +207,28 @@ class Poller:
             raise
 
         for (fileno, event) in events:
-            if event == select.EPOLLIN or event == select.EPOLLERR or event == select.EPOLLHUP:
-                # read event, or error condition that we should treat like a read event
+            if event & select.EPOLLIN:
+                # read event
                 with self.lock:
                     pes = self.event_sources_by_fileno[fileno]
                     handler = pes.read_handler
                 handler(pes.stream)
-            elif event == select.EPOLLOUT:
+            elif event & select.EPOLLOUT:
                 # write event
                 with self.lock:
                     pes = self.event_sources_by_fileno[fileno]
                     handler = pes.write_handler
                 handler(pes.stream)
+            elif event & select.EPOLLERR or event & select.EPOLLHUP:
+                # error or disconnect
+                with self.lock:
+                    pes = self.event_sources_by_fileno[fileno]
+                    fd = pes.stream
+                    self.unsafe_remove_fd(fd)
             else:
                 # Event that we don't know how to handle.
                 logging.debug("I was asked to handle an unsupported event (%d) "
-                              "for fd %d. I'm removing fd %d" % (event, fileno, fileno))
+                              "for fd %d. I'm removing fd %d", event, fileno, fileno)
                 with self.lock:
                     pes = self.event_sources_by_fileno[fileno]
                     fd = pes.stream

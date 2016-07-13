@@ -33,9 +33,9 @@ import getopt
 import logging
 import optparse
 import os
-import pickle
-import shlex
+import cPickle as pickle
 import signal
+import socket
 import string
 import sys
 import threading
@@ -71,10 +71,13 @@ class vSPCBackendMemory:
 
         self.hook_queue = Queue.Queue()
 
-    def setup(self, args):
-        if args != '':
-            print "%s takes no arguments" % str(self.__class__)
-            sys.exit(1)
+    def get_option_group(self, parser):
+        group = optparse.OptionGroup(parser, "Memory backend options",
+            "This backend takes no arguments")
+        return group
+
+    def setup(self, options):
+        pass
 
     def _start_thread(self, f):
         th = threading.Thread(target = f)
@@ -89,6 +92,9 @@ class vSPCBackendMemory:
 
         self.observer_thread = self._start_thread(self.observer_run)
         self.hook_thread = self._start_thread(self.hook_run)
+
+    def shutdown(self):
+        pass
 
     def _queue_run(self, queue):
         while True:
@@ -144,27 +150,34 @@ class vSPCBackendMemory:
         self.hook_queue.put(lambda: self.vm_hook(*data))
 
     def vm_hook(self, uuid, name, port):
-        logging.debug("vm_hook: uuid: %s, name: %s, port: %s" %
-                      (uuid, name, port))
+        logging.debug("vm_hook: uuid: %s, name: %s, port: %s",
+                      uuid, name, port)
 
     def notify_vm_msg(self, uuid, name, s):
         self.hook_queue.put(lambda: self.vm_msg_hook(uuid, name, s))
 
     def vm_msg_hook(self, uuid, name, s):
-        logging.debug("vm_msg_hook: uuid: %s, name: %s, msg: %s" %
-                      (uuid, name, s))
+        logging.debug("vm_msg_hook: uuid: %s, name: %s, msg: %s",
+                      uuid, name, s)
 
     def notify_client_del(self, sock, uuid):
         self.hook_queue.put(lambda: self.client_del(sock, uuid))
 
     def client_del(self, sock, uuid):
-        logging.debug("client_del: uuid %s, client %s" % (uuid, sock))
+        logging.debug("client_del: uuid %s, client %s", uuid, sock)
         vm = None
         with self.observed_vms_lock:
             if uuid in self.observed_vms: vm = self.observed_vms[uuid]
-        if vm is not None:
-            with vm.modification_lock:
-                self.maybe_unlock_vm(vm, sock.fileno())
+
+        # socket manipulations may fail if there was no socket successfully
+        # created but we're still doing client cleanup
+        try:
+            if vm is not None:
+                with vm.modification_lock:
+                    self.maybe_unlock_vm(vm, sock.fileno())
+            sock.close()
+        except socket.error:
+            pass
 
     def notify_vm_del(self, uuid):
         self.observer_queue.put(lambda: self.vm_del(uuid))
@@ -177,7 +190,7 @@ class vSPCBackendMemory:
         self.hook_queue.put(lambda: self.vm_del_hook(uuid))
 
     def vm_del_hook(self, uuid):
-        logging.debug("vm_del_hook: uuid: %s" % uuid)
+        logging.debug("vm_del_hook: uuid: %s", uuid)
 
     def notify_query_socket(self, sock, vspc):
         self.admin_queue.put(lambda: self.handle_query_socket(sock, vspc))
@@ -240,7 +253,7 @@ class vSPCBackendMemory:
                 pickle.dump(Exception('No common version'), sockfile)
             sockfile.flush()
         except Exception, e:
-            logging.debug('handle_query_socket exception: %s' % str(e))
+            logging.debug('handle_query_socket exception: %s', str(e))
 
     def format_vm_listing(self):
         vms = self.get_observed_vms()
@@ -282,7 +295,7 @@ class vSPCBackendMemory:
 
         Callers are assumed to hold the modification lock of the vm argument.
         """
-        logging.debug("Trying to lock vm %s for client" % vm.name)
+        logging.debug("Trying to lock vm %s for client", vm.name)
         if lock_mode == Q_LOCK_EXCL:
             logging.debug("Exclusive lock mode selected")
             if vm.lock.acquire(False):
@@ -343,39 +356,23 @@ class vSPCBackendFile(vSPCBackendMemory):
 
         self.shelf = None
 
-    def usage(self):
-        sys.stderr.write('''\
-%s options: [-h|--help] -f|--file filename
+    def get_option_group(self, parser):
+        group = optparse.OptionGroup(parser, "File backend options")
+        group.add_option("-f", "--file", dest="filename",
+            help="DBM file prefix to persist mappings to (.dat/.dir may follow")
 
-  -h|--help: This message
-  -f|--file: Where to persist VMs (required argument)
-''' % str(self.__class__))
+        return group
 
-    def setup(self, args):
+    def setup(self, options):
         import shelve
 
-        fname = None
+        if not options.filename:
+            raise ValueError("Filename is required when using the File backend")
 
-        try:
-            opts, args = getopt.gnu_getopt(shlex.split(args), 'hf:', ['--help', '--file='])
-            for o, a in opts:
-                if o in ['-h', '--help']:
-                    self.usage()
-                    sys.exit(0)
-                elif o in ['-f', '--file']:
-                    fname = a
-                else:
-                    assert False, 'unhandled option'
-        except getopt.GetoptError, err:
-            print str(err)
-            self.usage()
-            sys.exit(2)
+        self.shelf = shelve.open(options.filename)
 
-        if not fname:
-            self.usage()
-            sys.exit(2)
-
-        self.shelf = shelve.open(fname)
+    def shutdown(self):
+        self.shelf.close()
 
     def vm_hook(self, uuid, name, port):
         self.shelf[uuid] = { P_UUID : uuid, P_NAME : name, P_PORT : port }
@@ -397,25 +394,36 @@ class vSPCBackendLogging(vSPCBackendMemory):
     """
     I'm a backend for vSPC.py that logs VM messages to a file or files.
     """
-    def setup(self, args):
-        parsed_args = self.parse_args(args)
+    def __init__(self):
+        self.logdir = "/var/log/consoles"
+        self.prefix = ""
+        self.mode = "0600"
 
-        self.logdir = parsed_args.logdir
-        self.prefix = parsed_args.prefix
-        self.mode  = parsed_args.mode
         # uuid => filehandle
         self.logfiles = {}
 
         # uuid => name
         self.vm_names = {}
 
+        # uuid => string of scrollback
+        self.scrollback = {}
+        self.scrollback_limit = 200
+
+
+    def setup(self, options):
+        self.logdir = options.logdir
+        self.prefix = options.prefix
+        self.mode  = options.mode
+
         # register for SIGHUP, so we know when to reload logfiles.
         signal.signal(signal.SIGHUP, self.handle_sighup)
 
-        # uuid => string of scrollback
-        self.scrollback = {}
         # How many scrollback lines to keep for each VM.
-        self.scrollback_limit = parsed_args.context
+        self.scrollback_limit = options.context
+
+    def shutdown(self):
+        for k, f in self.logfiles.iteritems():
+            f.close()
 
     def add_scrollback(self, uuid, msg):
         msgs = self.scrollback.setdefault(uuid, "")
@@ -441,24 +449,23 @@ class vSPCBackendLogging(vSPCBackendMemory):
             # again, it should go through, so just do that.
             return self.vm_msg_hook(uuid, name, msg)
 
-    def parse_args(self, args):
+    def get_option_group(self, parser):
+        group = optparse.OptionGroup(parser, "Logging backend options")
+
         # XXX: Annoying; it would be nicer if OptionParser would print
         # out a more verbose message upon encountering unrecognized
         # arguments
-        u = "%prog ...--backend-args='[ [ (-l | --logdir) logdir ] [ (-p | --prefix) prefix ] [ (-m | --mode) mode ]'"
-        parser = optparse.OptionParser(usage=u)
-        parser.add_option("-l", "--logdir", type='string',
-                          action='store', default="/var/log/consoles",
-                          help='Directory in which log files are written')
-        parser.add_option("-p", "--prefix", default='', type='string',
-                          help="First part of log file names")
-        parser.add_option("--context", type='int', action='store', default=200,
-                          help="Number of VM messages to keep as context for new connections")
-        parser.add_option("-m", "--mode", default='0600', type='string',
-                          help="Mode for new logs (default 0600)")
-        args_list = shlex.split(args)
-        (options, args) = parser.parse_args(args_list)
-        return options
+        group.add_option("-l", "--logdir", type='string',
+                         action='store', default="/var/log/consoles",
+                         help='Directory in which log files are written')
+        group.add_option("-p", "--prefix", default='', type='string',
+                         help="First part of log file names")
+        group.add_option("--context", type='int', action='store', default=200,
+                         help="Number of VM messages to keep as context for new connections")
+        group.add_option("-m", "--mode", default='0600', type='string',
+                         help="Mode for new logs (default 0600)")
+
+        return group
 
     def file_for_vm(self, name, uuid):
         if uuid not in self.logfiles:

@@ -6,7 +6,6 @@ import logging
 import socket
 import sys
 import termios
-import time
 
 from poll import Poller
 from telnet import VMTelnetProxyClient
@@ -54,7 +53,7 @@ class FakeVMClient(Poller):
         except (EOFError, IOError, socket.error):
             self.quit()
 
-        logging.debug("got data from proxy: %s\n" % string_dump(s))
+        logging.debug("got data from proxy: %s\n", string_dump(s))
 
         if not s:
             # Could be option data, or something else that gets eaten by
@@ -78,7 +77,7 @@ class FakeVMClient(Poller):
             post_data = data[loc+1:]
             data = pre_data + self.process_escape_character() + post_data
 
-        logging.debug("got client data %s, sending to proxy" % string_dump(data))
+        logging.debug("got client data %s, sending to proxy", string_dump(data))
         self.send_buffered(self.tc, data)
 
     def process_escape_character(self):
@@ -107,7 +106,7 @@ class FakeVMClient(Poller):
         return ret
 
     def send_buffered(self, conn, data = ''):
-        logging.debug("sending data to proxy: %s" % string_dump(data))
+        logging.debug("sending data to proxy: %s", string_dump(data))
         if conn.send_buffered(data):
             self.add_writer(conn, self.send_buffered)
         else:

@@ -33,8 +33,9 @@ from vSPC.admin import AdminProtocolClient, Q_LOCK_FFAR, Q_LOCK_FFA, Q_LOCK_WRIT
 # Default for --admin-port, the port to hit vSPC-query with
 ADMIN_PORT = 13371
 
-def do_query(host, port, vm_name, lock_mode):
-    client = AdminProtocolClient(host, port, vm_name, sys.stdin, sys.stdout, lock_mode)
+
+def do_query(host, port, vm_name, lock_mode, query_mode):
+    client = AdminProtocolClient(host, port, vm_name, sys.stdin, sys.stdout, lock_mode, query_mode)
     client.run()
 
 def check_lock_mode(option, opt_str, value, parser):
@@ -67,6 +68,8 @@ def main():
                       help="port to connect to on the server")
     parser.add_option("-d", "--debug", action='store_true', default=False,
                       help="debug mode; print to stdout, don't log to syslog")
+    parser.add_option("-q", "--query-mode", action='store_true', dest='query_mode', default=False,
+                      help="only show port number when a vm name or uuid is given")
     parser.add_option("--stdout", action='store_false', dest='syslog', default=True,
                       help="log to stdout instead of syslog")
     parser.add_option("-s", dest='remote_host', default="localhost",
@@ -92,7 +95,7 @@ def main():
         vm_name = args[0]
 
     return do_query(options.remote_host, options.admin_port, vm_name,
-                    options.client_lock_mode)
+                    options.client_lock_mode, options.query_mode)
 
 if __name__ == '__main__':
     sys.exit(main())

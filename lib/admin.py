@@ -61,7 +61,7 @@ Q_LOCK_FAILED = "lock_failed"
 CLIENT_ESCAPE_CHAR = chr(29)
 
 class AdminProtocolClient(Poller):
-    def __init__(self, host, admin_port, vm_name, src, dst, lock_mode):
+    def __init__(self, host, admin_port, vm_name, src, dst, lock_mode, query_mode):
         Poller.__init__(self)
         self.admin_port = admin_port
         self.host       = host
@@ -71,7 +71,7 @@ class AdminProtocolClient(Poller):
         self.command_source = src
         self.destination    = dst
         self.lock_mode      = lock_mode
-
+        self.query_mode     = query_mode
     class Client(TelnetServer):
         def __init__(self, sock,
                      server_opts = (BINARY, SGA),
@@ -93,14 +93,16 @@ class AdminProtocolClient(Poller):
         if server_vers == 2:
             pickle.dump(self.vm_name, sockfile)
             pickle.dump(self.lock_mode, sockfile)
+            pickle.dump(self.query_mode, sockfile)
             sockfile.flush()
             status = unpickler.load()
             if status == Q_VM_NOTFOUND:
                 if self.vm_name is not None:
-                    sys.stderr.write("The host '%s' couldn't find the vm '%s'. "
-                                     "The host knows about the following VMs:\n" % (self.host, self.vm_name))
-                vm_list = unpickler.load()
-                self.process_noninteractive(vm_list)
+                    sys.stderr.write("The host '%s' couldn't find the vm '%s'.\n" % (self.host, self.vm_name))
+                    if not self.query_mode:
+                        sys.stderr.write("The host knows about the following VMs:\n")
+                        vm_list = unpickler.load()
+                        self.process_noninteractive(vm_list)
                 return None
             elif status == Q_LOCK_BAD:
                 sys.stderr.write("The host doesn't understand how to give me a write lock\n")
@@ -110,13 +112,18 @@ class AdminProtocolClient(Poller):
                 return None
 
             assert status == Q_OK
-            applied_lock_mode = unpickler.load()
-            if applied_lock_mode == Q_LOCK_FFAR:
-                self.destination.write("Someone else has an exclusive write lock; operating in read-only mode\n")
-            seed_data = unpickler.load()
+            if self.vm_name is not None and self.query_mode:
+                vm_list = unpickler.load()
+                self.process_noninteractive(vm_list)
+                return None
+            else:
+                applied_lock_mode = unpickler.load()
+                if applied_lock_mode == Q_LOCK_FFAR:
+                    self.destination.write("Someone else has an exclusive write lock; operating in read-only mode\n")
+                seed_data = unpickler.load()
 
-            for entry in seed_data:
-                self.destination.write(entry)
+                for entry in seed_data:
+                    self.destination.write(entry)
 
         elif server_vers == 1:
             vers, resp = unpickler.load()

@@ -221,9 +221,18 @@ class vSPCBackendMemory:
             if vers == 2:
                 vm_name = pickle.load(sockfile)
                 lock_mode = pickle.load(sockfile)
+                query_mode = pickle.load(sockfile)
                 vm = self.observed_vm_for_name(vm_name)
 
-                if vm is not None and \
+                if query_mode:
+                    if vm is not None:
+                        pickle.dump(Q_OK, sockfile)
+                        pickle.dump([{Q_NAME:vm.name, Q_UUID:vm.uuid, Q_PORT:vm.port}], sockfile)
+                    else:
+                        pickle.dump(Q_VM_NOTFOUND, sockfile)
+                    sockfile.flush()
+                    return
+                elif vm is not None and \
                    lock_mode in (Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR):
                     status = Q_LOCK_FAILED
                     with vm.modification_lock:

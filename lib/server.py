@@ -46,7 +46,7 @@ from telnetlib import BINARY, SGA, ECHO
 from vSPC.poll import Poller
 from vSPC.telnet import TelnetServer, VMTelnetServer, VMExtHandler, hexdump
 
-LISTEN_BACKLOG = 5
+LISTEN_BACKLOG = 128 # match the default SOMAXCONN value to max performance
 
 def openport(port, iface="", use_ssl=False, ssl_cert=None, ssl_key=None):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

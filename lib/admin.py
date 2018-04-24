@@ -97,12 +97,12 @@ class AdminProtocolClient(Poller):
             sockfile.flush()
             status = unpickler.load()
             if status == Q_VM_NOTFOUND:
-                if self.vm_name is not None:
+                if self.query_mode:
                     sys.stderr.write("The host '%s' couldn't find the vm '%s'.\n" % (self.host, self.vm_name))
-                    if not self.query_mode:
-                        sys.stderr.write("The host knows about the following VMs:\n")
-                        vm_list = unpickler.load()
-                        self.process_noninteractive(vm_list)
+                else:
+                    sys.stderr.write("The host knows about the following VMs:\n")
+                    vm_list = unpickler.load()
+                    self.process_noninteractive(vm_list)
                 return None
             elif status == Q_LOCK_BAD:
                 sys.stderr.write("The host doesn't understand how to give me a write lock\n")

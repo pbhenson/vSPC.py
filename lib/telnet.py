@@ -290,7 +290,7 @@ class TelnetServer(FixedTelnet):
         return self.read_very_lazy()
 
     def send_buffered(self, s = ''):
-        self.send_buffer += s
+        self.send_buffer += s.replace(IAC, IAC+IAC)
         nbytes = self.sock.send(self.send_buffer)
         self.send_buffer = self.send_buffer[nbytes:]
         return len(self.send_buffer) > 0

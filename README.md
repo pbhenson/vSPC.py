@@ -77,7 +77,7 @@ and possibly --key options.
 You run the concentrator through the vSPCServer program. The vSPCServer
 program is configurable with a number of options, documented below and
 in the program's usage text. Without options, the program will listen
-for VM connections on port 13770, listen for admin protocol connections
+for VM connections on port 13370, listen for admin protocol connections
 on port 13371, and, for each connected VM, starts a telnet server that
 listens for and serves connections from clients to the VM end of the
 virtual serial port. By default, the program listens for incoming proxy

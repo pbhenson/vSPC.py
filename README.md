@@ -32,18 +32,20 @@ activity logging, and some other minor improvements.
 Kevan's fork was re-forked by EMC Isilon to address bugs as we began using
 it heavily in our environment once more.
 
+EMC's fork was integrated into Kevan's repo, which was eventually handed
+off to Paul B. Henson (https://github.com/pbhenson) to maintain.
+
 # Requirements
 
 Python 2.5 or better is required, due to use of the 'with' statement and
-other syntax that was introduced in Python 2.5. It's being developed against
-Python 2.6, however, since that's the currently-shipping version for
-RHEL/CentOS 6.
+other syntax that was introduced in Python 2.5. Upstream development
+is currently under Gentoo Linux with python 2.7.
 
 Due to the use of epoll in the server implementation, Linux is required.
 There may be other issues associated with using vSPC.py on other OSs, as
 large parts of vSPC.py were only developed & tested on Linux.
 
-VMWare ESXi 4.1 through 5.5 are supported.
+vSPC has been deployed on VMWare ESXi 4.1 through 6.7.
 
 # Configuring VMs to connect to the concentrator
 
@@ -153,3 +155,4 @@ rpmbuild -ta vSPC-<version>.tar.gz
 - Dave Johnson (fixes for missing getopt modules and missing shelf.sync() calls)
 - Fabien Wernli (add options to configure listen interface, fix broken -f option, packaging improvements)
 - Casey Peel (simplified backend argument parsing, fix connection leaks, and improved logging performance)
+- Paul B. Henson (minor fixes and maintenance)

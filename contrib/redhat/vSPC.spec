@@ -1,7 +1,7 @@
 %define name vSPC
-%define version 0.2
-%define unmangled_version 0.2
-%define release 2.%{dist}
+%define version 0.6
+%define unmangled_version 0.6
+%define release 6.%{dist}
 
 Summary: vSPC is a virtual Serial Port Concentrator for VMware virtual serial ports,available in ESXi 4.1+.
 Name: %{name}
@@ -14,7 +14,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
 Prefix: %{_prefix}
 BuildArch: noarch
 Vendor: Zach Loafman <zmerlynn@sf.net>
-Url: https://github.com/isnotajoke/vSPC.py
+Url: https://github.com/pbhenson/vSPC.py
 Requires: python26
 BuildRequires: python26
 BuildRequires: python26-distribute

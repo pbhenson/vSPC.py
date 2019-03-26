@@ -16,10 +16,12 @@ setup(
                    "available in ESXi 4.1+."),
     license = "BSD",
     keywords = "ESX VMWare serial port concentrator",
-    url = "https://github.com/isnotajoke/vSPC.py",
+    url = "https://github.com/pbhenson/vSPC.py",
     package_dir = {'vSPC': 'lib'},
     scripts = [ 'vSPCClient', 'vSPCServer' ],
-    data_files = [('/etc/init.d', ['util/sysvinit/vSPCServer'])],
+    # Don't blindly install Red Hat specific files
+    # Python-fu welcomed to make this only run on Red Hat boxes
+    #data_files = [('/etc/init.d', ['util/sysvinit/vSPCServer'])],
     packages=['vSPC'],
     #apparently this doesn't always work need to look into this
     #long_description=read('README.md'),
@@ -29,20 +31,3 @@ setup(
       "License :: OSI Approved :: BSD License",
     ],
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

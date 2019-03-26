@@ -1,0 +1,9 @@
+# Config file for vspc
+
+# enable SSL
+VSPC_SSL="--ssl --cert=/etc/stunnel/stunnel.pem"
+
+# chose a different backend
+VSPC_BACKEND="--backend Logging -l /var/log/consoles -m 0644"
+
+VSPC_OPTS="--no-vm-port $VSPC_SSL $VSPC_BACKEND"

@@ -1,0 +1,30 @@
+#!/sbin/openrc-run
+
+extra_started_commands="reload"
+
+depend() {
+	need net
+}
+
+start() {
+	ebegin "Starting vSPC.py Virtual Serial Port Concentrator"
+	local pidfile=/var/run/vspc/vspc.pid
+	mkdir -p "$(dirname ${pidfile})"
+	start-stop-daemon --start --quiet --pidfile=${pidfile} \
+		--exec /usr/bin/vSPCServer -- --pidfile=${pidfile} $VSPC_OPTS
+	eend $?
+}
+
+reload() {
+	ebegin "Reloading vSPC.py Virtual Serial Port Concentrator"
+	local pidfile=/var/run/vspc/vspc.pid
+	kill -HUP $(cat ${pidfile})
+	eend $?
+}
+
+stop() {
+	local pidfile=/var/run/vspc/vspc.pid
+	ebegin "Shutting down vSPC.py Virtual Serial Port Concentrator"
+	start-stop-daemon --stop --quiet --pidfile=${pidfile}
+	eend $?
+}

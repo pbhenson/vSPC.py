@@ -325,7 +325,8 @@ class VMTelnetServer(TelnetServer):
         self.uuid = None
 
     def _send_vmware(self, s):
-        self.sock.sendall(IAC + SB + VMWARE_EXT + s + IAC + SE)
+        self.sock.sendall(IAC + SB + VMWARE_EXT + s.replace(IAC, IAC+IAC)
+                          + IAC + SE)
 
     def _handle_known_options(self, data):
         logging.debug("client knows VM commands: %s", map(ord, data))

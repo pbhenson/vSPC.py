@@ -395,6 +395,8 @@ class vSPCBackendLogging(vSPCBackendMemory):
     I'm a backend for vSPC.py that logs VM messages to a file or files.
     """
     def __init__(self):
+        vSPCBackendMemory.__init__(self)
+
         self.logdir = "/var/log/consoles"
         self.prefix = ""
         self.mode = "0600"

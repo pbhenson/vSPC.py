@@ -348,7 +348,7 @@ class VMTelnetServer(TelnetServer):
                 "%s, uri: %s), will not proxy for this VM", dir, uri)
 
     def _handle_vmotion_begin(self, data):
-        cookie = data + struct.pack("I", hash(self) & 0xFFFFFFFF)
+        cookie = data + struct.pack("I", os.urandom(4))
 
         if self.handler.handle_vmotion_begin(self, cookie):
             logging.debug("vMotion initiated: %s", hexdump(cookie))

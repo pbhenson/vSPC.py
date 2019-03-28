@@ -35,6 +35,7 @@ import logging
 import struct
 import time
 
+from os import urandom;
 from telnetlib import *
 from telnetlib import IAC,DO,DONT,WILL,WONT,BINARY,ECHO,SGA,SB,SE,NOOPT,theNULL
 
@@ -348,7 +349,7 @@ class VMTelnetServer(TelnetServer):
                 "%s, uri: %s), will not proxy for this VM", dir, uri)
 
     def _handle_vmotion_begin(self, data):
-        cookie = data + struct.pack("I", os.urandom(4))
+        cookie = data + urandom(4)
 
         if self.handler.handle_vmotion_begin(self, cookie):
             logging.debug("vMotion initiated: %s", hexdump(cookie))

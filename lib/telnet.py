@@ -32,6 +32,7 @@
 BASENAME = 'vSPC.py'
 
 import logging
+import random
 import struct
 import time
 
@@ -348,7 +349,7 @@ class VMTelnetServer(TelnetServer):
                 "%s, uri: %s), will not proxy for this VM", dir, uri)
 
     def _handle_vmotion_begin(self, data):
-        cookie = data + struct.pack("I", os.urandom(4))
+        cookie = data + struct.pack("I", random.randint(0, 2**32-1))
 
         if self.handler.handle_vmotion_begin(self, cookie):
             logging.debug("vMotion initiated: %s", hexdump(cookie))

@@ -29,18 +29,19 @@
 # authors and should not be interpreted as representing official policies, either expressed
 # or implied, of <copyright holder>.
 
-import cPickle as pickle
+import pickle
 import socket
 import sys
+import traceback
 
 from telnetlib import BINARY, SGA
 
-from telnet import TelnetServer
-from poll import Poller
-from util import prepare_terminal, restore_terminal
+from vSPC.telnet import TelnetServer
+from vSPC.poll import Poller
+from vSPC.util import prepare_terminal, restore_terminal
 
 # Query protocol
-Q_VERS        = 2
+Q_VERS        = 3
 Q_NAME        = 'name'
 Q_UUID        = 'uuid'
 Q_PORT        = 'port'
@@ -82,7 +83,7 @@ class AdminProtocolClient(Poller):
     def connect_to_vspc(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((self.host, self.admin_port))
-        sockfile = s.makefile()
+        sockfile = s.makefile("rwb")
 
         unpickler = pickle.Unpickler(sockfile)
 
@@ -90,7 +91,7 @@ class AdminProtocolClient(Poller):
         pickle.dump(Q_VERS, sockfile)
         sockfile.flush()
         server_vers = int(unpickler.load())
-        if server_vers == 2:
+        if server_vers == 3:
             pickle.dump(self.vm_name, sockfile)
             pickle.dump(self.lock_mode, sockfile)
             sockfile.flush()
@@ -99,7 +100,11 @@ class AdminProtocolClient(Poller):
                 if self.vm_name is not None:
                     sys.stderr.write("The host '%s' couldn't find the vm '%s'. "
                                      "The host knows about the following VMs:\n" % (self.host, self.vm_name))
-                vm_list = unpickler.load()
+                vm_count = unpickler.load()
+                vm_list = [ ]
+                while vm_count > 0:
+                    vm_list.append(unpickler.load())
+                    vm_count -= 1
                 self.process_noninteractive(vm_list)
                 return None
             elif status == Q_LOCK_BAD:
@@ -117,12 +122,6 @@ class AdminProtocolClient(Poller):
 
             for entry in seed_data:
                 self.destination.write(entry)
-
-        elif server_vers == 1:
-            vers, resp = unpickler.load()
-            assert vers == server_vers
-            self.process_noninteractive(resp)
-            return None
 
         else:
             sys.stderr.write("Server sent us a version %d response, "
@@ -142,13 +141,13 @@ class AdminProtocolClient(Poller):
         if CLIENT_ESCAPE_CHAR in data:
             loc = data.index(CLIENT_ESCAPE_CHAR)
             pre_data = data[:loc]
-            self.send_buffered(self.vspc_socket, pre_data)
+            self.send_buffered(self.vspc_socket, pre_data.encode())
             post_data = data[loc+1:]
             data = self.process_escape_character() + post_data
 
-        self.send_buffered(self.vspc_socket, data)
+        self.send_buffered(self.vspc_socket, data.encode())
 
-    def send_buffered(self, ts, s = ''):
+    def send_buffered(self, ts, s = b''):
         if ts.send_buffered(s):
             self.add_writer(ts, self.send_buffered)
         else:
@@ -178,7 +177,7 @@ class AdminProtocolClient(Poller):
         while s:
             c = s[:100]
             s = s[100:]
-            self.destination.write(c)
+            self.destination.write(c.decode("utf-8"))
 
         self.destination.flush()
 
@@ -222,7 +221,7 @@ class AdminProtocolClient(Poller):
             out = "%s:%s" % (vm[Q_NAME], vm[Q_UUID])
             if vm[Q_PORT] is not None:
                 out += ":%d" % vm[Q_PORT]
-            print out
+            print(out)
 
     def prepare_terminal(self):
         (oldterm, oldflags) = prepare_terminal(self.command_source)
@@ -250,7 +249,7 @@ class AdminProtocolClient(Poller):
             self.add_reader(self.vspc_socket, self.new_server_data)
             self.add_reader(self.command_source, self.new_client_data)
             self.run_forever()
-        except Exception, e:
-            sys.stderr.write("Caught exception %s, closing" % e)
+        except Exception as e:
+            sys.stderr.write("".join(traceback.TracebackException.from_exception(e).format()))
         finally:
             self.quit()

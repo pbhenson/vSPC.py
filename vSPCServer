@@ -83,7 +83,7 @@ def daemonize():
 
 def get_backend_type(shortname):
     name = "vSPCBackend" + shortname
-    if globals().has_key(name):
+    if name in globals():
         backend_type = globals()[name]
     else:
         # Try importing assuming that PYTHONPATH has been set.
@@ -97,16 +97,16 @@ def get_backend_type(shortname):
                 __import__(module_name)
                 module = sys.modules[module_name]
             except ImportError:
-                print "No built-in backend type '%s' found. Error trying to " \
+                print("No built-in backend type '%s' found. Error trying to " \
                     "import backend (looking for %s.py). Either the module " \
                     "wasn't on your PYTHONPATH or, if it was, there was an " \
-                    "error in the backend file." % (shortname, name)
+                    "error in the backend file." % (shortname, name))
                 sys.exit(1)
 
         try:
             backend_type = getattr(module, name)
         except AttributeError:
-            print "Backend module %s loaded, but class %s not found" % (name, name)
+            print("Backend module %s loaded, but class %s not found" % (name, name))
             sys.exit(1)
 
     return backend_type
@@ -189,7 +189,7 @@ def main():
 
     try:
         backend.setup(options)
-    except ValueError, err:
+    except ValueError as err:
         parser.error(err)
         sys.exit(2)
 
@@ -213,7 +213,7 @@ def main():
         logging.info("Shutdown requested on keyboard, exiting")
         backend.shutdown()
         return 0
-    except Exception, e:
+    except Exception as e:
         logging.exception("Top level exception caught")
         backend.shutdown()
         return 1

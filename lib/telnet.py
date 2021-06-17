@@ -29,44 +29,49 @@
 # authors and should not be interpreted as representing official policies, either expressed
 # or implied, of <copyright holder>.
 
-BASENAME = 'vSPC.py'
+BASENAME = b'vSPC.py'
 
 import logging
 import struct
 import time
+import os
+import functools
 
 from telnetlib import *
 from telnetlib import IAC,DO,DONT,WILL,WONT,BINARY,ECHO,SGA,SB,SE,NOOPT,theNULL
+
+def bchr(v):
+    return bytes([int(v)])
 
 # How long to wait for an option response. Any option response resets
 # the counter. This is mainly to deal with "raw" connections (like
 # gdb) that don't negotiate telnet options at all.
 UNACK_TIMEOUT = 0.5
 
-VMWARE_EXT = chr(232) # VMWARE-TELNET-EXT
+VMWARE_EXT = bchr(232) # VMWARE-TELNET-EXT
 
-KNOWN_SUBOPTIONS_1 = chr(0) # + suboptions
-KNOWN_SUBOPTIONS_2 = chr(1) # + suboptions
-UNKNOWN_SUBOPTION_RCVD_1 = chr(2) # + code
-UNKNOWN_SUBOPTION_RCVD_2 = chr(3) # + code
-VMOTION_BEGIN = chr(40) # + sequence
-VMOTION_GOAHEAD = chr(41) # + sequence + secret
-VMOTION_NOTNOW = chr(43) # + sequence + secret
-VMOTION_PEER = chr(44) # + sequence + secret
-VMOTION_PEER_OK = chr(45) # + sequence + secret
-VMOTION_COMPLETE = chr(46) # + sequence
-VMOTION_ABORT = chr(48) # <EOM> (?)
-DO_PROXY = chr(70) # + [CS] + URI
-WILL_PROXY = chr(71) # <EOM>
-WONT_PROXY = chr(73) # <EOM>
-VM_VC_UUID = chr(80) # + uuid
-GET_VM_VC_UUID = chr(81) # <EOM>
-VM_NAME = chr(82) # + name
-GET_VM_NAME = chr(83) # <EOM>
-VM_BIOS_UUID = chr(84) # + bios uuid
-GET_VM_BIOS_UUID = chr(85) # <EOM>
-VM_LOCATION_UUID = chr(86) # + location uuid
-GET_VM_LOCATION_UUID = chr(87) # <EOM>
+KNOWN_SUBOPTIONS_1 = bchr(0) # + suboptions
+KNOWN_SUBOPTIONS_2 = bchr(1) # + suboptions
+UNKNOWN_SUBOPTION_RCVD_1 = bchr(2) # + code
+UNKNOWN_SUBOPTION_RCVD_2 = bchr(3) # + code
+VMOTION_BEGIN = bchr(40) # + sequence
+VMOTION_GOAHEAD = bchr(41) # + sequence + secret
+VMOTION_NOTNOW = bchr(43) # + sequence + secret
+VMOTION_PEER = bchr(44) # + sequence + secret
+VMOTION_PEER_OK = bchr(45) # + sequence + secret
+VMOTION_COMPLETE = bchr(46) # + sequence
+VMOTION_ABORT = bchr(48) # <EOM> (?)
+DO_PROXY = bchr(70) # + [CS] + URI
+WILL_PROXY = bchr(71) # <EOM>
+WONT_PROXY = bchr(73) # <EOM>
+VM_VC_UUID = bchr(80) # + uuid
+GET_VM_VC_UUID = bchr(81) # <EOM>
+VM_NAME = bchr(82) # + name
+GET_VM_NAME = bchr(83) # <EOM>
+VM_BIOS_UUID = bchr(84) # + bios uuid
+GET_VM_BIOS_UUID = bchr(85) # <EOM>
+VM_LOCATION_UUID = bchr(86) # + location uuid
+GET_VM_LOCATION_UUID = bchr(87) # <EOM>
 
 EXT_SUPPORTED = {
     KNOWN_SUBOPTIONS_1 : 'known_options', # VM->Proxy
@@ -97,7 +102,7 @@ telnet client. This port is intended for VMware connections only.\r
 '''
 
 def hexdump(data):
-    return reduce(lambda x, y: x + ('%x' % ord(y)), data, '')
+    return functools.reduce(lambda x, y: x + ('%x' % ord(y)), data, '')
 
 class FixedTelnet(Telnet):
     '''
@@ -105,10 +110,6 @@ class FixedTelnet(Telnet):
     particular, base Telnet does not properly handle NULL characters,
     and in general is a little sloppy for BINARY mode.
 
-    LICENSING: The code for this class was based on the base Telnet
-    class definition from Python 2.6, and as such is covered by that
-    GPLv2 compatible license:
-    http://www.python.org/download/releases/2.6/license/
     '''
     def process_rawq(self):
         """Transfer from raw queue to cooked queue.
@@ -116,10 +117,8 @@ class FixedTelnet(Telnet):
         Set self.eof when connection is closed.  Don't block unless in
         the midst of an IAC sequence.
 
-        XXX - Sigh, this is a cut and paste from telnetlib to fix a
-        bug in the processing of NULL suring an SB..SE sequence. -ZML
         """
-        buf = ['', '']
+        buf = [b'', b'']
         try:
             while self.rawq:
                 c = self.rawq_getchar()
@@ -139,17 +138,17 @@ class FixedTelnet(Telnet):
                         self.iacseq += c
                         continue
 
-                    self.iacseq = ''
+                    self.iacseq = b''
                     if c == IAC:
                         buf[self.sb] = buf[self.sb] + c
                     else:
                         if c == SB: # SB ... SE start.
                             self.sb = 1
-                            self.sbdataq = ''
+                            self.sbdataq = b''
                         elif c == SE:
                             self.sb = 0
                             self.sbdataq = self.sbdataq + buf[1]
-                            buf[1] = ''
+                            buf[1] = b''
                         if self.option_callback:
                             # Callback is supposed to look into
                             # the sbdataq
@@ -160,8 +159,8 @@ class FixedTelnet(Telnet):
                             # unless we did a WILL/DO before.
                             self.msg('IAC %d not recognized' % ord(c))
                 elif len(self.iacseq) == 2:
-                    cmd = self.iacseq[1]
-                    self.iacseq = ''
+                    cmd = self.iacseq[1:2]
+                    self.iacseq = b''
                     opt = c
                     if cmd in (DO, DONT):
                         self.msg('IAC %s %d',
@@ -178,7 +177,7 @@ class FixedTelnet(Telnet):
                         else:
                             self.sock.sendall(IAC + DONT + opt)
         except EOFError: # raised by self.rawq_getchar()
-            self.iacseq = '' # Reset on EOF
+            self.iacseq = b'' # Reset on EOF
             self.sb = 0
             pass
         self.cookedq = self.cookedq + buf[0]
@@ -195,7 +194,7 @@ class TelnetServer(FixedTelnet):
         self.client_opts_accepted = list(client_opts)
         self.unacked = []
         self.last_ack = time.time()
-        self.send_buffer = ''
+        self.send_buffer = b''
 
         for opt in self.server_opts:
             logging.debug("sending WILL %d", ord(opt))
@@ -275,7 +274,7 @@ class TelnetServer(FixedTelnet):
     def negotiation_done(self):
         self.process_available()
         if self.unacked:
-            desc = map(lambda (x, y): (ord(x), ord(y)), self.unacked)
+            desc = map(lambda x, y: (ord(x), ord(y)), self.unacked)
             if time.time() > self.last_ack + UNACK_TIMEOUT:
                 logging.debug("timeout waiting for commands %s", desc)
                 self.unacked = []
@@ -289,7 +288,7 @@ class TelnetServer(FixedTelnet):
             return ''
         return self.read_very_lazy()
 
-    def send_buffered(self, s = ''):
+    def send_buffered(self, s = b''):
         self.send_buffer += s.replace(IAC, IAC+IAC)
         nbytes = self.sock.send(self.send_buffer)
         self.send_buffer = self.send_buffer[nbytes:]
@@ -348,22 +347,22 @@ class VMTelnetServer(TelnetServer):
                 "%s, uri: %s), will not proxy for this VM", dir, uri)
 
     def _handle_vmotion_begin(self, data):
-        cookie = data + struct.pack("I", os.urandom(4))
+        cookie = data + os.urandom(4)
 
         if self.handler.handle_vmotion_begin(self, cookie):
-            logging.debug("vMotion initiated: %s", hexdump(cookie))
+            logging.debug("vMotion initiated: %s", cookie.hex())
             self._send_vmware(VMOTION_GOAHEAD + cookie)
         else:
-            logging.debug("vMotion denied: %s", hexdump(cookie))
+            logging.debug("vMotion denied: %s", cookie.hex())
             self._send_vmware(VMOTION_NOTNOW + cookie)
 
     def _handle_vmotion_peer(self, cookie):
         if self.handler.handle_vmotion_peer(self, cookie):
-            logging.debug("vMotion peer: %s", hexdump(cookie))
+            logging.debug("vMotion peer: %s", cookie.hex())
             self._send_vmware(VMOTION_PEER_OK + cookie)
         else:
             # There's no clear spec on rejecting this
-            logging.debug("vMotion peer rejected: %s", hexdump(cookie))
+            logging.debug("vMotion peer rejected: %s", cookie.hex())
             self._send_vmware(UNKNOWN_SUBOPTION_RCVD_2 + VMOTION_PEER)
 
     def _handle_vmotion_complete(self, data):
@@ -373,6 +372,7 @@ class VMTelnetServer(TelnetServer):
         self.handler.handle_vmotion_abort(self)
 
     def _handle_vc_uuid(self, data):
+        data = data.decode("utf-8")
         data = data.replace(' ', '')
         if not self.uuid:
             self.uuid = data
@@ -383,12 +383,12 @@ class VMTelnetServer(TelnetServer):
             self.close()
 
     def _handle_vm_name(self, data):
-        self.name = data
+        self.name = data.decode('utf-8')
         self.handler.handle_vm_name(self)
 
     def _send_vmware_initial(self):
         self._send_vmware(KNOWN_SUBOPTIONS_2 + \
-                              reduce(lambda s,c: s+c,
+                              functools.reduce(lambda s,c: s+c,
                                      sorted(EXT_SUPPORTED.keys())))
         self._send_vmware(GET_VM_VC_UUID)
         self._send_vmware(GET_VM_NAME)
@@ -414,7 +414,7 @@ class VMTelnetServer(TelnetServer):
         data = data[2:]
 
         handled = False
-        if EXT_SUPPORTED.has_key(subcmd):
+        if subcmd in EXT_SUPPORTED:
             meth = '_handle_%s' % EXT_SUPPORTED[subcmd]
             if hasattr(self, meth):
                 getattr(self, meth)(data)
@@ -473,7 +473,7 @@ class VMTelnetProxyClient(TelnetServer):
     def _send_vmware_initial(self):
         # Send options
         self._send_vmware(KNOWN_SUBOPTIONS_1 + \
-                              reduce(lambda s,c: s+c,
+                              functools.reduce(lambda s,c: s+c,
                                      sorted(EXT_SUPPORTED.keys())))
 
         # Send proxy request
@@ -499,7 +499,7 @@ class VMTelnetProxyClient(TelnetServer):
         data = data[2:]
 
         handled = False
-        if EXT_SUPPORTED.has_key(subcmd):
+        if subcmd in EXT_SUPPORTED:
             meth = '_handle_%s' % EXT_SUPPORTED[subcmd]
             if hasattr(self, meth):
                 getattr(self, meth)(data)

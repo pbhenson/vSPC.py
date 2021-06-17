@@ -78,7 +78,7 @@ class FakeVMClient(Poller):
             data = pre_data + self.process_escape_character() + post_data
 
         logging.debug("got client data %s, sending to proxy", string_dump(data))
-        self.send_buffered(self.tc, data)
+        self.send_buffered(self.tc, data.encode())
 
     def process_escape_character(self):
         self.restore_terminal()
@@ -105,7 +105,7 @@ class FakeVMClient(Poller):
         self.prepare_terminal()
         return ret
 
-    def send_buffered(self, conn, data = ''):
+    def send_buffered(self, conn, data = b''):
         logging.debug("sending data to proxy: %s", string_dump(data))
         if conn.send_buffered(data):
             self.add_writer(conn, self.send_buffered)

@@ -37,15 +37,11 @@ off to Paul B. Henson (https://github.com/pbhenson) to maintain.
 
 # Requirements
 
-Python 2.5 or better is required, due to use of the 'with' statement and
-other syntax that was introduced in Python 2.5. Upstream development
-is currently under Gentoo Linux with python 2.7.
+Python 3.5 or greater is required.
 
 Due to the use of epoll in the server implementation, Linux is required.
 There may be other issues associated with using vSPC.py on other OSs, as
 large parts of vSPC.py were only developed & tested on Linux.
-
-vSPC has been deployed on VMWare ESXi 4.1 through 6.7.
 
 # Configuring VMs to connect to the concentrator
 

@@ -179,7 +179,7 @@ class Poller:
         with self.lock:
             try:
                 self.unsafe_remove_fd(stream)
-            except IOError, e:
+            except IOError as e:
                 if e.errno != errno.EBADF:
                     raise
 
@@ -198,7 +198,7 @@ class Poller:
         """
         try:
             events = self.epoll.poll(timeout)
-        except IOError, e:
+        except IOError as e:
             if e.errno == errno.EINTR:
                 # interrupted syscall; continue w/o error
                 return False
@@ -272,7 +272,7 @@ class Selector:
         try:
             (readers, writers, exceptions) = \
                 select.select(self.read_handlers.keys(), [], [], timeout)
-        except select.error, e:
+        except select.error as e:
             # interrupted syscall
             return False
         for reader in readers:

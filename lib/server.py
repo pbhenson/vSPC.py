@@ -361,7 +361,6 @@ class vSPC(Poller, VMExtHandler):
 
         self.open_vm_port(vm, port)
         self.vms[uuid] = vm
-        logging.info("added vms keys %s type %s", uuid, type(uuid))
 
         # Only notify if we generated the port
         if not port:

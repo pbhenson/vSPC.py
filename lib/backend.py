@@ -487,7 +487,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
         return self.logfiles[uuid]
 
     def reload(self):
-        for k, f in iter(self.logfiles.items()):
+        for k, f in iter(list(self.logfiles.items())):
             f.close()
             del(self.logfiles[k])
             self.logfiles[k] = self.file_for_vm(self.vm_names[k], k)

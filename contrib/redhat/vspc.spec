@@ -1,5 +1,5 @@
 %define name vspc
-%define version 0.8
+%define version 0.8.1
 %define release 1%{dist}
 
 Summary: vSPC is a virtual Serial Port Concentrator for VMware ESXi virtual serial ports

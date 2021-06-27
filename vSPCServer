@@ -132,7 +132,7 @@ def main():
                       help="Debug mode (turns up logging and implies --stdout --no-fork)")
     parser.add_option("-a", "--admin-port", type='int', default=ADMIN_PORT,
                       help='The port to listen/use for queries (default %s)' % ADMIN_PORT)
-    parser.add_option("-p", "--proxy-port", type='int', default=PROXY_PORT,
+    parser.add_option("--proxy-port", type='int', default=PROXY_PORT,
                       help='The proxy port to listen on (default %s)' % PROXY_PORT)
     parser.add_option("--proxy-iface", type='string', default=PROXY_IFACE,
                       help='The proxy interface to listen on (default %s)' % PROXY_IFACE)

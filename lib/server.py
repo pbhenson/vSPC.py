@@ -200,7 +200,8 @@ class vSPC(Poller, VMExtHandler):
     def queue_new_vm_connection(self, listener):
         try:
             sock = listener.accept()[0]
-        except ssl.SSLError:
+        except (ssl.SSLError, OSError) as error:
+            logging.error("Failed to accept new connection - " + str(error))
             return
 
         if not self._can_accept_more_connections():

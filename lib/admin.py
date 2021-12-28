@@ -177,7 +177,7 @@ class AdminProtocolClient(Poller):
         while s:
             c = s[:100]
             s = s[100:]
-            self.destination.write(c.decode("utf-8"))
+            self.destination.write(c.decode("utf-8", errors='replace'))
 
         self.destination.flush()
 

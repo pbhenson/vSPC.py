@@ -435,7 +435,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
 
     def add_scrollback(self, uuid, msg):
         msgs = self.scrollback.setdefault(uuid, "")
-        msgs += msg.decode('utf-8')
+        msgs += msg.decode('utf-8', errors='replace')
         msgs = msgs[len(msgs)-self.scrollback_limit:]
         self.scrollback[uuid] = msgs
 
@@ -447,7 +447,7 @@ class vSPCBackendLogging(vSPCBackendMemory):
     def vm_msg_hook(self, uuid, name, msg):
         f = self.file_for_vm(name, uuid)
         try:
-            f.write(msg.decode('utf-8'))
+            f.write(msg.decode('utf-8', errors='replace'))
             f.flush()
             self.add_scrollback(uuid, msg)
         except ValueError as e:

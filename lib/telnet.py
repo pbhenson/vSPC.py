@@ -372,7 +372,7 @@ class VMTelnetServer(TelnetServer):
         self.handler.handle_vmotion_abort(self)
 
     def _handle_vc_uuid(self, data):
-        data = data.decode("utf-8")
+        data = data.decode("utf-8", errors='replace')
         data = data.replace(' ', '')
         if not self.uuid:
             self.uuid = data
@@ -383,7 +383,7 @@ class VMTelnetServer(TelnetServer):
             self.close()
 
     def _handle_vm_name(self, data):
-        self.name = data.decode('utf-8')
+        self.name = data.decode('utf-8', errors='replace')
         self.handler.handle_vm_name(self)
 
     def _send_vmware_initial(self):

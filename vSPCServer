@@ -118,7 +118,7 @@ def main():
     if "--backend" in sys.argv:
         try:
             backend_type = sys.argv[sys.argv.index("--backend") + 1]
-        except:
+        except Exception:
             pass
 
     backend = get_backend_type(backend_type)()
@@ -213,7 +213,7 @@ def main():
         logging.info("Shutdown requested on keyboard, exiting")
         backend.shutdown()
         return 0
-    except Exception as e:
+    except Exception:
         logging.exception("Top level exception caught")
         backend.shutdown()
         return 1

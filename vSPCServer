@@ -171,8 +171,12 @@ def main():
 
     (options, args) = parser.parse_args()
 
+    logger_format = "%(asctime)s %(levelname)-5s [%(filename)s:%(lineno)d] %(message)s"
+    log_level = logging.DEBUG if options.debug else logging.INFO
+    logging.basicConfig(level=log_level, format=logger_format)
+
     logger = logging.getLogger('')
-    logger.setLevel(logging.DEBUG if options.debug else logging.INFO)
+    logger.setLevel(log_level)
     if options.syslog and not options.debug:
         from logging.handlers import SysLogHandler
         from logging import Formatter

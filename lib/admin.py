@@ -221,7 +221,8 @@ class AdminProtocolClient(Poller):
             out = "%s:%s" % (vm[Q_NAME], vm[Q_UUID])
             if vm[Q_PORT] is not None:
                 out += ":%d" % vm[Q_PORT]
-            print(out)
+            self.destination.write(out)
+            self.destination.write("\n")
 
     def prepare_terminal(self):
         (oldterm, oldflags) = prepare_terminal(self.command_source)

@@ -116,8 +116,42 @@ class FixedTelnet(Telnet):
     FixedTelnet is a bug-fix override of the base Telnet class. In
     particular, base Telnet does not properly handle NULL characters,
     and in general is a little sloppy for BINARY mode.
-
     '''
+    def _set_peer_name(self):
+        """
+        store socket peer name, for use in logs
+        """
+        try:
+            self.peername = self.sock.getpeername()
+        except Exception:
+            logging.exception("could not get socket peer name")
+
+    def __init__(self, *args, **kwargs):
+        self.peername = None
+        super().__init__(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({self.host},{self.port})"
+
+    def msg(self, msg, *args):
+        """
+        Telnet.msg uses print function for debug messages, override to use logger
+        """
+        if logger.isEnabledFor(logging.DEBUG):
+            # avoid interpreting arguments unless necessary
+            if args:
+                formatted_args = msg % args
+            else:
+                formatted_args = msg
+            logger.debug("%s: %s", str(self), formatted_args)
+
+    def _send_cmd(self, s):
+        cmd = IAC + s
+        if logger.isEnabledFor(logging.DEBUG):
+            peername_str = f" to {self.peername}" if self.peername else ""
+            logger.debug("%s: sending cmd %s%s", str(self), cmd, peername_str)
+        self.sock.sendall(cmd)
+
     def process_rawq(self):
         """Transfer from raw queue to cooked queue.
 
@@ -175,14 +209,14 @@ class FixedTelnet(Telnet):
                         if self.option_callback:
                             self.option_callback(self.sock, cmd, opt)
                         else:
-                            self.sock.sendall(IAC + WONT + opt)
+                            self._send_cmd(WONT + opt)
                     elif cmd in (WILL, WONT):
                         self.msg('IAC %s %d',
                             cmd == WILL and 'WILL' or 'WONT', ord(opt))
                         if self.option_callback:
                             self.option_callback(self.sock, cmd, opt)
                         else:
-                            self.sock.sendall(IAC + DONT + opt)
+                            self._send_cmd(DONT + opt)
         except EOFError: # raised by self.rawq_getchar()
             self.iacseq = b'' # Reset on EOF
             self.sb = 0
@@ -192,9 +226,10 @@ class FixedTelnet(Telnet):
 
 class TelnetServer(FixedTelnet):
     def __init__(self, sock, server_opts = (), client_opts = ()):
-        Telnet.__init__(self)
+        super().__init__()
         self.set_option_negotiation_callback(self._option_callback)
         self.sock = sock
+        self._set_peer_name()
         self.server_opts = list(server_opts) # What do WE do?
         self.server_opts_accepted = list(server_opts)
         self.client_opts = list(client_opts) # What do THEY do?
@@ -211,9 +246,6 @@ class TelnetServer(FixedTelnet):
             logger.debug("sending DO %d", ord(opt))
             self._send_cmd(DO + opt)
             self.unacked.append((DO, opt))
-
-    def _send_cmd(self, s):
-        self.sock.sendall(IAC + s)
 
     def _option_callback(self, sock, cmd, opt):
         if cmd in (DO, DONT):
@@ -283,10 +315,14 @@ class TelnetServer(FixedTelnet):
         if self.unacked:
             desc = map(lambda x, y: (ord(x), ord(y)), self.unacked)
             if time.time() > self.last_ack + UNACK_TIMEOUT:
-                logger.debug("timeout waiting for commands %s", desc)
+                if logger.isEnabledFor(logging.DEBUG):
+                    # use list to evaluate the map, otherwise its
+                    # printed as <map object at 0x...>
+                    logger.debug("timeout waiting for commands %s", list(desc))
                 self.unacked = []
             else:
-                logger.debug("still waiting for %s", desc)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("still waiting for %s", list(desc))
 
         return not self.unacked
 
@@ -298,6 +334,15 @@ class TelnetServer(FixedTelnet):
     def send_buffered(self, s = b''):
         self.send_buffer += s.replace(IAC, IAC+IAC)
         nbytes = self.sock.send(self.send_buffer)
+        if logger.isEnabledFor(logging.DEBUG):
+            peername_str = f" to {self.peername}" if self.peername else ""
+            logger.debug(
+                "%s: sent first %d bytes of %s%s",
+                str(self),
+                nbytes,
+                self.send_buffer,
+                peername_str,
+            )
         self.send_buffer = self.send_buffer[nbytes:]
         return len(self.send_buffer) > 0
 
@@ -325,14 +370,18 @@ class VMTelnetServer(TelnetServer):
                  server_opts = (BINARY, SGA, ECHO),
                  client_opts = (BINARY, SGA, VMWARE_EXT),
                  handler = None):
-        TelnetServer.__init__(self, sock, server_opts, client_opts)
-        self.handler = handler or VMExtHandler()
         self.name = None
         self.uuid = None
+        TelnetServer.__init__(self, sock, server_opts, client_opts)
+        self.handler = handler or VMExtHandler()
+
+    def __str__(self):
+        if self.name is None:
+            return f"{self.__class__.__name__}(name not set)"
+        return f"{self.__class__.__name__}({self.name})"
 
     def _send_vmware(self, s):
-        self.sock.sendall(IAC + SB + VMWARE_EXT + s.replace(IAC, IAC+IAC)
-                          + IAC + SE)
+        self._send_cmd(SB + VMWARE_EXT + s.replace(IAC, IAC+IAC) + IAC + SE)
 
     def _handle_known_options(self, data):
         logger.debug("client knows VM commands: %s", hexdump(data))
@@ -409,6 +458,7 @@ class VMTelnetServer(TelnetServer):
             self._send_vmware_initial()
             # Fall through so VMWARE_EXT will get removed from unacked
         elif cmd == WONT and opt == VMWARE_EXT:
+            logger.debug("peer is not using vmware extension protocol. closing")
             self.sock.sendall(NOT_VMWARE.encode("utf-8"))
             self.close()
 
@@ -443,8 +493,11 @@ class VMTelnetProxyClient(TelnetServer):
 
         TelnetServer.__init__(self, sock, server_opts, client_opts)
 
+    def __str__(self):
+        return f"{self.__class__.__name__}({self.vm_name})"
+
     def _send_vmware(self, s):
-        self.sock.sendall(IAC + SB + VMWARE_EXT + s + IAC + SE)
+        self._send_cmd(SB + VMWARE_EXT + s + IAC + SE)
 
     def _handle_known_options(self, data):
         logger.debug("client knows VM commands: %s", hexdump(data))

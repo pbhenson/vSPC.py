@@ -102,7 +102,10 @@ telnet client. This port is intended for VMware connections only.\r
 '''
 
 def hexdump(data):
-    return functools.reduce(lambda x, y: x + ('%x' % ord(y)), data, '')
+    if isinstance(data, bytes):
+        return functools.reduce(lambda x, y: x + ('%x' % y), data, '')
+    else:
+        return functools.reduce(lambda x, y: x + ('%x' % ord(y)), data, '')
 
 class FixedTelnet(Telnet):
     '''
@@ -260,7 +263,7 @@ class TelnetServer(FixedTelnet):
         elif cmd == SB:
             pass # Don't log this, caller is processing
         else:
-            logging.debug("cmd %d %s", ord(cmd), opt)
+            logging.debug("cmd %d %d", ord(cmd), ord(opt))
 
     def process_available(self):
         """Process all data, but don't take anything off the cooked queue.
@@ -328,7 +331,7 @@ class VMTelnetServer(TelnetServer):
                           + IAC + SE)
 
     def _handle_known_options(self, data):
-        logging.debug("client knows VM commands: %s", map(ord, data))
+        logging.debug("client knows VM commands: %s", hexdump(data))
 
     def _handle_unknown_option(self, data):
         logging.debug("client doesn't know VM command %d, dropping",
@@ -402,7 +405,7 @@ class VMTelnetServer(TelnetServer):
             self._send_vmware_initial()
             # Fall through so VMWARE_EXT will get removed from unacked
         elif cmd == WONT and opt == VMWARE_EXT:
-            self.sock.sendall(NOT_VMWARE)
+            self.sock.sendall(NOT_VMWARE.encode("utf-8"))
             self.close()
 
         if not cmd == SE or not self.sbdataq[:1] == VMWARE_EXT:
@@ -440,7 +443,7 @@ class VMTelnetProxyClient(TelnetServer):
         self.sock.sendall(IAC + SB + VMWARE_EXT + s + IAC + SE)
 
     def _handle_known_options(self, data):
-        logging.debug("client knows VM commands: %s", map(ord, data))
+        logging.debug("client knows VM commands: %s", hexdump(data))
 
     def _handle_unknown_option(self, data):
         logging.debug("client doesn't know VM command %d, dropping", hexdump(data))
@@ -449,10 +452,10 @@ class VMTelnetProxyClient(TelnetServer):
         logging.debug("client doesn't know VM command %s, dropping", hexdump(data))
 
     def _handle_get_vm_name(self, data):
-        self._send_vmware(VM_NAME + self.vm_name)
+        self._send_vmware(VM_NAME + self.vm_name.encode("utf-8"))
 
     def _handle_get_vc_uuid(self, data):
-        self._send_vmware(VM_VC_UUID + self.vm_uuid)
+        self._send_vmware(VM_VC_UUID + self.vm_uuid.encode("utf-8"))
 
     def _handle_do_proxy_will(self, data):
         logging.debug("proxy will handle proxy request for vm %s (%s)",
@@ -468,7 +471,8 @@ class VMTelnetProxyClient(TelnetServer):
         # the server-side part of this only handles server proxy
         # requests, and requires that serviceURI be vSPC.py, so we need
         # to send 'S' and 'vSPC.py'.
-        self._send_vmware(DO_PROXY + 'S' + 'vSPC.py')
+        cmd = DO_PROXY + "S".encode("utf-8") + "vSPC.py".encode("utf-8")
+        self._send_vmware(cmd)
 
     def _send_vmware_initial(self):
         # Send options

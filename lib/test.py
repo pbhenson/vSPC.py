@@ -7,9 +7,9 @@ import socket
 import sys
 import termios
 
-from poll import Poller
-from telnet import VMTelnetProxyClient
-from util import prepare_terminal_with_flags, restore_terminal, string_dump, build_flags_ssh
+from vSPC.poll import Poller
+from vSPC.telnet import VMTelnetProxyClient
+from vSPC.util import prepare_terminal_with_flags, restore_terminal, string_dump, build_flags_ssh
 
 CLIENT_ESCAPE_CHAR = chr(29)
 

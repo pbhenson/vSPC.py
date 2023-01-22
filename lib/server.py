@@ -525,7 +525,7 @@ class vSPC(Poller, VMExtHandler):
             orphans = self.orphans[:]
             orphans.sort(key=lambda uuid: self.vms[uuid].last_time,
                          reverse=True)
-            for index in xrange(min(connection_overage, len(orphans))):
+            for index in range(min(connection_overage, len(orphans))):
                 uuid = orphans[index]
                 vm = self.vms[uuid]
                 self.expire_orphan(vm)

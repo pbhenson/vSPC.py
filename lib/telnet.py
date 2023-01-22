@@ -364,11 +364,12 @@ class TelnetServer(FixedTelnet):
                 if logger.isEnabledFor(logging.DEBUG):
                     # use list to evaluate the map, otherwise its
                     # printed as <map object at 0x...>
-                    logger.debug("timeout waiting for commands %s", list(desc))
+                    logger.debug("%s: timeout waiting for commands %s", self, 
+                                 list(desc))
                 self.unacked = []
             else:
                 if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug("still waiting for %s", list(desc))
+                    logger.debug("%s: still waiting for %s", self, list(desc))
 
         return not self.unacked
 

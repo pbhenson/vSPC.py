@@ -246,7 +246,7 @@ class vSPC(Poller, VMExtHandler):
 
     def abort_vm_connection(self, vt):
         if vt.uuid:
-            logging.info('VM %s (uuid %s) disconnected', vt.name, vt.uuid)
+            logging.info('%s disconnected', vt)
             if vt.uuid in self.vms:
                 if vt in self.vms[vt.uuid].vts:
                     self.vms[vt.uuid].vts.remove(vt)
@@ -260,9 +260,8 @@ class vSPC(Poller, VMExtHandler):
         try:
             neg_done = vt.negotiation_done()
         except (EOFError, IOError, socket.error):
-            logging.debug("socket error", stack_info=True, exc_info=True)
-            logging.warn('VM %s (uuid %s) experienced a socket error, '
-                         'closing socket', vt.name, vt.uuid)
+            logging.debug("%s got socket error", vt, stack_info=True, exc_info=True)
+            logging.warn('%s experienced a socket error, closing socket', vt)
             self.abort_vm_connection(vt)
             return
 
@@ -279,8 +278,7 @@ class vSPC(Poller, VMExtHandler):
         try:
             s = vt.read_very_lazy()
         except (EOFError, IOError, socket.error):
-            logging.debug("VM %s (uuid %s) got socket error", vt.name, vt.uuid,
-                          stack_info=True, exc_info=True)
+            logging.debug("%s got socket error", vt, stack_info=True, exc_info=True)
             self.abort_vm_connection(vt)
             return
 
@@ -301,7 +299,7 @@ class vSPC(Poller, VMExtHandler):
             try:
                 self.send_buffered(cl, s)
             except (EOFError, IOError, socket.error):
-                logging.debug('cl.socket send error', exc_info=True, 
+                logging.debug('%s to %s: cl.socket send error', vt, cl, exc_info=True,
                               stack_info=True)
                 self.abort_client_connection(cl)
         self.add_reader(vt, self.queue_new_vm_data)
@@ -326,8 +324,8 @@ class vSPC(Poller, VMExtHandler):
         try:
             neg_done = client.negotiation_done()
         except (EOFError, IOError, socket.error):
-            logging.debug('socket error, aborting client connection', 
-                          exc_info=True, stack_info=True)
+            logging.debug('%s: socket error, aborting client connection',
+                          client, exc_info=True, stack_info=True)
             self.abort_client_connection(client)
             return
 
@@ -344,8 +342,8 @@ class vSPC(Poller, VMExtHandler):
         try:
             s = client.read_very_lazy()
         except (EOFError, IOError, socket.error):
-            logging.debug('socket error, aborting client connection', 
-                          exc_info=True, stack_info=True)
+            logging.debug('%s: socket error, aborting client connection', 
+                          client, exc_info=True, stack_info=True)
             self.abort_client_connection(client)
             return
 
@@ -359,8 +357,8 @@ class vSPC(Poller, VMExtHandler):
             try:
                 self.send_buffered(vt, s)
             except (EOFError, IOError, socket.error):
-                logging.debug('cl.socket send error', exc_info=True,
-                              stack_info=True)
+                logging.debug('%s to %s: cl.socket send error', client, vt, 
+                              exc_info=True, stack_info=True)
         self.add_reader(client, self.queue_new_client_data)
 
     def queue_new_client_data(self, client):

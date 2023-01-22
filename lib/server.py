@@ -162,6 +162,8 @@ class vSPC(Poller, VMExtHandler):
                 vm = self.vms[uuid]
                 client_connections += len(vm.clients)
             except KeyError:
+                logging.debug("got keyerror while iterating over vms", 
+                              exc_info=True, stack_info=True)
                 # Other processes may be changing self.vms under us so don't
                 # die if the vms record doesn't exist when we get to it.
                 pass
@@ -192,16 +194,16 @@ class vSPC(Poller, VMExtHandler):
         try:
             vt = VMTelnetServer(sock, handler = self)
             self.add_reader(vt, self.queue_new_vm_data)
-        except socket.error as err:
+        except socket.error:
             # If there was a socket error on initialization, capture the
             # exception to avoid logging a traceback.
-            logging.debug("uninitialized VM socket error")
+            logging.debug("uninitialized VM socket error", exc_info=True)
 
     def queue_new_vm_connection(self, listener):
         try:
             sock = listener.accept()[0]
-        except (ssl.SSLError, OSError) as error:
-            logging.error("Failed to accept new connection - " + str(error))
+        except (ssl.SSLError, OSError):
+            logging.exception("Failed to accept new connection")
             return
 
         if not self._can_accept_more_connections():
@@ -219,10 +221,10 @@ class vSPC(Poller, VMExtHandler):
         try:
             client = self.Client(sock)
             client.uuid = vm.uuid
-        except socket.error as err:
+        except socket.error:
             # If there was a socket error on initialization, capture the
             # exception to avoid logging a traceback.
-            logging.debug("uninitialized client socket error")
+            logging.debug("uninitialized client socket error", exc_info=True)
             return
 
         self.add_reader(client, self.queue_new_client_data)
@@ -258,6 +260,7 @@ class vSPC(Poller, VMExtHandler):
         try:
             neg_done = vt.negotiation_done()
         except (EOFError, IOError, socket.error):
+            logging.debug("socket error", stack_info=True, exc_info=True)
             logging.warn('VM %s (uuid %s) experienced a socket error, '
                          'closing socket', vt.name, vt.uuid)
             self.abort_vm_connection(vt)
@@ -276,6 +279,8 @@ class vSPC(Poller, VMExtHandler):
         try:
             s = vt.read_very_lazy()
         except (EOFError, IOError, socket.error):
+            logging.debug("VM %s (uuid %s) got socket error", vt.name, vt.uuid,
+                          stack_info=True, exc_info=True)
             self.abort_vm_connection(vt)
             return
 
@@ -295,8 +300,9 @@ class vSPC(Poller, VMExtHandler):
         for cl in clients:
             try:
                 self.send_buffered(cl, s)
-            except (EOFError, IOError, socket.error) as e:
-                logging.debug('cl.socket send error: %s', str(e))
+            except (EOFError, IOError, socket.error):
+                logging.debug('cl.socket send error', exc_info=True, 
+                              stack_info=True)
                 self.abort_client_connection(cl)
         self.add_reader(vt, self.queue_new_vm_data)
 
@@ -320,6 +326,8 @@ class vSPC(Poller, VMExtHandler):
         try:
             neg_done = client.negotiation_done()
         except (EOFError, IOError, socket.error):
+            logging.debug('socket error, aborting client connection', 
+                          exc_info=True, stack_info=True)
             self.abort_client_connection(client)
             return
 
@@ -336,6 +344,8 @@ class vSPC(Poller, VMExtHandler):
         try:
             s = client.read_very_lazy()
         except (EOFError, IOError, socket.error):
+            logging.debug('socket error, aborting client connection', 
+                          exc_info=True, stack_info=True)
             self.abort_client_connection(client)
             return
 
@@ -348,8 +358,9 @@ class vSPC(Poller, VMExtHandler):
         for vt in self.vms[client.uuid].vts:
             try:
                 self.send_buffered(vt, s)
-            except (EOFError, IOError, socket.error) as e:
-                logging.debug('cl.socket send error: %s', str(e))
+            except (EOFError, IOError, socket.error):
+                logging.debug('cl.socket send error', exc_info=True,
+                              stack_info=True)
         self.add_reader(client, self.queue_new_client_data)
 
     def queue_new_client_data(self, client):

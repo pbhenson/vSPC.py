@@ -389,8 +389,12 @@ class vSPC(Poller, VMExtHandler):
         for vt in self.vms[client.uuid].vts:
             try:
                 self.send_buffered(vt, s)
+            except BrokenPipeError:
+                logging.debug('%s to %s: BrokenPipeError', client, vt,
+                              exc_info=True, stack_info=True)
+                self.abort_vm_connection(vt)
             except (EOFError, IOError, socket.error):
-                logging.debug('%s to %s: cl.socket send error', client, vt, 
+                logging.debug('%s to %s: cl.socket send error', client, vt,
                               exc_info=True, stack_info=True)
         self.add_reader(client, self.queue_new_client_data)
 

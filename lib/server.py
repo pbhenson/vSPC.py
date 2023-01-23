@@ -96,6 +96,9 @@ class vSPC(Poller, VMExtHandler):
         self.vm_expire_time = vm_expire_time
         self.backend = backend
 
+        # should be held when modifying self.vm_port_next or self.ports
+        self.ports_lock = threading.Lock()
+
         self.orphans = []
         self.vms = {}
         self.ports = {}
@@ -550,9 +553,10 @@ class vSPC(Poller, VMExtHandler):
 
         self.delete_stream(vm)
         del vm.listener
-        if self.vm_port_next is not None:
-            self.vm_port_next = min(vm.port, self.vm_port_next)
-            del self.ports[vm.port]
+        with self.ports_lock:
+            if self.vm_port_next is not None:
+                self.vm_port_next = min(vm.port, self.vm_port_next)
+                del self.ports[vm.port]
         del self.vms[vm.uuid]
         if vm.vmotion:
             del self.vmotions[vm.vmotion]
@@ -565,18 +569,19 @@ class vSPC(Poller, VMExtHandler):
         if self.vm_port_next is None:
             return
 
-        if port:
-            vm.port = port
-        else:
-            p = self.vm_port_next
-            while p in self.ports:
-                p += 1
+        with self.ports_lock:
+            if port:
+                vm.port = port
+            else:
+                p = self.vm_port_next
+                while p in self.ports:
+                    p += 1
 
-            self.vm_port_next = p + 1
-            vm.port = p
+                self.vm_port_next = p + 1
+                vm.port = p
 
-        assert not vm.port in self.ports
-        self.ports[vm.port] = vm.uuid
+            assert not vm.port in self.ports
+            self.ports[vm.port] = vm.uuid
 
         vm.listener = openport(vm.port, self.vm_iface)
         self.add_reader(vm, self.queue_new_client_connection)

@@ -45,7 +45,7 @@ from vSPC.admin import Q_VERS, Q_NAME, Q_UUID, Q_PORT, Q_OK, Q_VM_NOTFOUND, Q_LO
 
 class vSPCBackendMemory:
     ADMIN_THREADS = 4
-    ADMIN_CONN_TIMEOUT = 0.2
+    ADMIN_CONN_TIMEOUT = 10
 
     class OVm:
         def __init__(self, uuid = None, port = None, name = None):

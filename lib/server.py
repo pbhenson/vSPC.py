@@ -238,6 +238,13 @@ class vSPC(Poller, VMExtHandler):
         sock.setblocking(0)
         sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
 
+        if settings.VM_CLIENT_LIMIT > 0:
+            if len(vm.clients) >= settings.VM_CLIENT_LIMIT:
+                logging.error("%s already has %d connections. Refusing connection",
+                              vm, len(vm.clients))
+                sock.close()
+                return
+
         try:
             client = self.Client(sock)
             client.uuid = vm.uuid
@@ -524,10 +531,17 @@ class vSPC(Poller, VMExtHandler):
         self.task_queue.put(lambda: self.new_admin_connection(sock))
 
     def new_admin_client_connection(self, sock, uuid, readonly):
+        vm = self.vms[uuid]
+
+        if settings.VM_CLIENT_LIMIT > 0:
+            if len(vm.clients) >= settings.VM_CLIENT_LIMIT:
+                logging.error("%s already has %d connections. Refusing connection",
+                              vm, len(vm.clients))
+                sock.close()
+                return
+
         client = self.Client(sock)
         client.uuid = uuid
-
-        vm = self.vms[uuid]
 
         if not readonly:
             self.add_reader(client, self.queue_new_client_data)

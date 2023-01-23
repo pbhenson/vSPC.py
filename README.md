@@ -136,6 +136,10 @@ If '--backend Foo' is given but no builtin backend Foo exists, vSPC.py
 tries to import module vSPCBackendFoo, looking for class vSPCBackendFoo.
 Use --help with the desired --backend for help using that backend.
 
+The environment variable VM_CLIENT_LIMIT can be set to a positive
+integer, in which case only VM_CLIENT_LIMIT clients can be connected
+to a VM at once.
+
 # Building the distribution
 
 source distribution

@@ -8,3 +8,6 @@ ADMIN_CONN_TIMEOUT = float(os.environ.get("ADMIN_CONN_TIMEOUT", "0.2"))
 # appended to device name and device uuid, to identify that particular
 # serial port
 SUPPORT_MULTI_CONSOLE = os.environ.get("SUPPORT_MULTI_CONSOLE", "false").lower() == "true"
+
+# if >= 1: only allow this many clients per VM
+VM_CLIENT_LIMIT = int(os.environ.get("VM_CLIENT_LIMIT", "0"))

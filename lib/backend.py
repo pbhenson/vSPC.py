@@ -42,11 +42,9 @@ import threading
 import queue
 
 from vSPC.admin import Q_VERS, Q_NAME, Q_UUID, Q_PORT, Q_OK, Q_VM_NOTFOUND, Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR, Q_LOCK_BAD, Q_LOCK_FAILED
+from vSPC import settings
 
 class vSPCBackendMemory:
-    ADMIN_THREADS = 4
-    ADMIN_CONN_TIMEOUT = 10
-
     class OVm:
         def __init__(self, uuid = None, port = None, name = None):
             self.uuid = uuid
@@ -87,7 +85,7 @@ class vSPCBackendMemory:
         return th
 
     def start(self):
-        for i in range(0, self.ADMIN_THREADS):
+        for i in range(0, settings.ADMIN_THREADS):
             self.admin_threads.append(self._start_thread(self.admin_run))
 
         self.observer_thread = self._start_thread(self.observer_run)
@@ -196,7 +194,7 @@ class vSPCBackendMemory:
         self.admin_queue.put(lambda: self.handle_query_socket(sock, vspc))
 
     def handle_query_socket(self, sock, vspc):
-        sock.settimeout(self.ADMIN_CONN_TIMEOUT)
+        sock.settimeout(settings.ADMIN_CONN_TIMEOUT)
         sockfile = sock.makefile("rwb")
 
         # Trade versions

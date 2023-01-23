@@ -70,6 +70,11 @@ class vSPC(Poller, VMExtHandler):
             self.last_time = None
             self.vmotion = None
 
+        def __str__(self):
+            return "Vm(name={}, uuid={}, port={}, clients={}, vts={}, last_time={}, vmotion={})".format(
+                self.name, self.uuid, self.port, self.clients, self.vts, self.last_time, self.vmotion,
+            )
+
         def fileno(self):
             return self.listener.fileno()
 
@@ -77,8 +82,16 @@ class vSPC(Poller, VMExtHandler):
         def __init__(self, sock,
                      server_opts = (BINARY, SGA, ECHO),
                      client_opts = (BINARY, SGA)):
-            TelnetServer.__init__(self, sock, server_opts, client_opts)
             self.uuid = None
+            TelnetServer.__init__(self, sock, server_opts, client_opts)
+
+        def __str__(self):
+            return "{}(uuid={}, port={}, peer={})".format(
+                self.__class__.__name__,
+                self.uuid,
+                self.port,
+                self.peername,
+            )
 
     def __init__(self, proxy_port, admin_port, proxy_iface, admin_iface,
                  vm_port_start, vm_iface, vm_expire_time, backend, use_ssl=False,
@@ -218,6 +231,8 @@ class vSPC(Poller, VMExtHandler):
         self.task_queue.put(lambda: self.new_vm_connection(sock))
 
     def new_client_connection(self, sock, vm):
+        logging.debug("new client connecting to %s", vm)
+
         sock.setblocking(0)
         sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
 
@@ -233,8 +248,7 @@ class vSPC(Poller, VMExtHandler):
         self.add_reader(client, self.queue_new_client_data)
         vm.clients.append(client)
 
-        logging.info('Client connected to %s (uuid %s), %d active clients',
-                     vm.name, vm.uuid, len(vm.clients))
+        logging.info("%s connected to %s (%d active clients)", client, vm, len(vm.clients))
 
     def queue_new_client_connection(self, vm):
         sock = vm.listener.accept()[0]
@@ -379,8 +393,8 @@ class vSPC(Poller, VMExtHandler):
         if not port:
             self.backend.notify_vm(vm.uuid, vm.name, vm.port)
 
-        logging.info('VM %s (uuid %s) connected, listening on port %s',
-                     vm.name, vm.uuid, vm.port)
+        logging.info('VM %s connected, listening on port %s',
+                     vm, vm.port)
 
         # The clock is always ticking
         self.stamp_orphan(vm)
@@ -405,7 +419,7 @@ class vSPC(Poller, VMExtHandler):
         vm = self.vms[vt.uuid]
         vm.vts.append(vt)
 
-        logging.info('VM %s (uuid %s) reconnected/vmotion', vm.name, vm.uuid)
+        logging.info('VM %s reconnected', vm)
 
     def handle_vm_name(self, vt):
         if not vt.uuid in self.vms:
@@ -428,16 +442,17 @@ class vSPC(Poller, VMExtHandler):
 
         vm.vmotion = data
         self.vmotions[data] = vt.uuid
+        logging.debug("vmotion began for %s", vt)
 
         return True
 
     def handle_vmotion_peer(self, vt, data):
         if not data in self.vmotions:
-            logging.debug('peer cookie %s doesn\'t exist', data.hex())
+            logging.debug('peer cookie %s doesn\'t exist', hexdump(data))
             return False
 
         logging.debug('peer cookie %s maps to uuid %s',
-                      data.hex(), self.vmotions[data])
+                      hexdump(data), self.vmotions[data])
 
         peer_uuid = self.vmotions[data]
         if vt.uuid:
@@ -450,18 +465,19 @@ class vSPC(Poller, VMExtHandler):
         else:
             # Act like we just learned the uuid
             vt.uuid = peer_uuid
+            logging.debug("vmotion_peer, calling handle_vc_uuid for %s", vt)
             self.handle_vc_uuid(vt)
 
         return True
 
     def handle_vmotion_complete(self, vt):
-        logging.debug('uuid %s vmotion complete', vt.uuid)
+        logging.debug('%s vmotion complete', vt)
         vm = self.vms[vt.uuid]
         del self.vmotions[vm.vmotion]
         vm.vmotion = None
 
     def handle_vmotion_abort(self, vt):
-        logging.debug('uuid %s vmotion abort', vt.uuid)
+        logging.debug('%s vmotion abort', vt)
         vm = self.vms[vt.uuid]
         if vm.vmotion:
             del self.vmotions[vm.vmotion]

@@ -69,6 +69,7 @@ class vSPC(Poller, VMExtHandler):
             self.listener = None
             self.last_time = None
             self.vmotion = None
+            self.lock = threading.Lock()
 
         def __str__(self):
             return "Vm(name={}, uuid={}, port={}, clients={}, vts={}, last_time={}, vmotion={})".format(
@@ -262,14 +263,13 @@ class vSPC(Poller, VMExtHandler):
         self.task_queue.put(lambda: self.new_client_connection(sock, vm))
 
     def abort_vm_connection(self, vt):
-        if vt.uuid:
-            logging.info('%s disconnected', vt)
-            if vt.uuid in self.vms:
-                if vt in self.vms[vt.uuid].vts:
-                    self.vms[vt.uuid].vts.remove(vt)
-                self.stamp_orphan(self.vms[vt.uuid])
-        else:
-            logging.warn('Unidentified VM socket closed')
+        logging.info("%s disconnected", vt)
+        vm = self.vms.get(vt.uuid)
+        if vt.uuid and vm is not None:
+            with vm.lock:
+                if vt in vm.vts:
+                    vm.vts.remove(vt)
+                self.stamp_orphan(vm)
         vt.close()
 
     def new_vm_data(self, vt):
@@ -327,13 +327,13 @@ class vSPC(Poller, VMExtHandler):
         self.task_queue.put(lambda: self.new_vm_data(vt))
 
     def abort_client_connection(self, client):
-        logging.info('Client disconnected from %s (uuid %s), %d active clients',
-                     self.vms[client.uuid].name,
-                     self.vms[client.uuid].uuid,
-                     len(self.vms[client.uuid].clients)-1)
-        if client in self.vms[client.uuid].clients:
-            self.vms[client.uuid].clients.remove(client)
-            self.stamp_orphan(self.vms[client.uuid])
+        vm = self.vms.get(client.uuid)
+        logging.info("%s disconnected from %s", client, vm)
+        if vm is not None:
+            with vm.lock:
+                if client in vm.clients:
+                    vm.clients.remove(client)
+                self.stamp_orphan(vm)
         self.backend.notify_client_del(client.sock, client.uuid)
 
     def new_client_data(self, client):
@@ -395,6 +395,10 @@ class vSPC(Poller, VMExtHandler):
         vm = self.Vm(uuid = uuid, name = name, vts = vts)
 
         self.open_vm_port(vm, port)
+
+        # The clock is always ticking
+        self.stamp_orphan(vm)
+
         self.vms[uuid] = vm
 
         # Only notify if we generated the port
@@ -403,9 +407,6 @@ class vSPC(Poller, VMExtHandler):
 
         logging.info('VM %s connected, listening on port %s',
                      vm, vm.port)
-
-        # The clock is always ticking
-        self.stamp_orphan(vm)
 
         return vm
 

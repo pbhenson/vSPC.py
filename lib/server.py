@@ -340,7 +340,11 @@ class vSPC(Poller, VMExtHandler):
         neg_done = False
         try:
             neg_done = client.negotiation_done()
-        except (EOFError, IOError, socket.error):
+        except EOFError:
+            logging.debug("%s: client closed connection", client)
+            self.abort_client_connection(client)
+            return
+        except (IOError, socket.error):
             logging.debug('%s: socket error, aborting client connection',
                           client, exc_info=True, stack_info=True)
             self.abort_client_connection(client)
@@ -358,7 +362,11 @@ class vSPC(Poller, VMExtHandler):
         s = None
         try:
             s = client.read_very_lazy()
-        except (EOFError, IOError, socket.error):
+        except EOFError:
+            logging.debug("%s: client closed connection", client)
+            self.abort_client_connection(client)
+            return
+        except (IOError, socket.error):
             logging.debug('%s: socket error, aborting client connection', 
                           client, exc_info=True, stack_info=True)
             self.abort_client_connection(client)

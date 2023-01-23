@@ -32,15 +32,14 @@
 from copy import deepcopy
 from collections.abc import Sequence
 import logging
-import struct
 import time
-import os
 import functools
 import random
 import string
 
 from telnetlib import *
 from telnetlib import IAC,DO,DONT,WILL,WONT,BINARY,ECHO,SGA,SB,SE,NOOPT,theNULL
+from vSPC import settings
 
 
 logger = logging.getLogger(__name__)
@@ -449,14 +448,18 @@ class VMTelnetServer(TelnetServer):
     def _handle_do_proxy(self, data):
         dir = 'client' if data[:1] == "C" else 'server'
         uri = data[1:]
-        logger.debug("%s: client wants to proxy %s to %s", self, dir, uri)
-        if dir == 'server':
-            self.uri = uri
-            self._send_vmware(WILL_PROXY)
-            logger.debug("%s: direction is correct, will proxy", self)
-        else:
+        decoded_uri = uri.decode("utf-8", errors="replace")
+        logger.debug("%s: client wants to proxy %s to %s", self, dir, decoded_uri)
+        if "_" in decoded_uri:
+            self._send_vmware(WONT_PROXY)
+            logger.error("%s: URI contains illegal character '_'. wont proxy", self)
+        elif dir != "server":
             self._send_vmware(WONT_PROXY)
             logger.error("%s: direction not correct. wont proxy", self)
+        else:
+            self.uri = decoded_uri
+            self._send_vmware(WILL_PROXY)
+            logger.debug("%s: will proxy", self)
 
     def _handle_vmotion_begin(self, data):
         rand_str = ''.join([random.choice(string.ascii_uppercase) for _ in range(4)])
@@ -489,6 +492,13 @@ class VMTelnetServer(TelnetServer):
         data = data.replace(' ', '')
         if not self.uuid:
             self.uuid = data
+            if settings.SUPPORT_MULTI_CONSOLE:
+                if self.uri:
+                    self.uuid = self.uuid + "_" + self.uri
+                else:
+                    logger.error("%s: URI is not set, cant handle vc_uuid", self)
+                    self.close()
+                    return
             self.handler.handle_vc_uuid(self)
         elif self.uuid != data:
             logger.warn("%s: conflicting uuids? "
@@ -497,6 +507,8 @@ class VMTelnetServer(TelnetServer):
 
     def _handle_vm_name(self, data):
         self.name = data.decode('utf-8', errors='replace')
+        if settings.SUPPORT_MULTI_CONSOLE:
+            self.name = self.name + "_" + self.uri
         self.handler.handle_vm_name(self)
 
     def _send_vmware_initial(self):
@@ -545,9 +557,11 @@ class VMTelnetServer(TelnetServer):
 class VMTelnetProxyClient(TelnetServer):
     def __init__(self, sock, vm_name, vm_uuid,
                  server_opts = (BINARY, SGA, VMWARE_EXT),
-                 client_opts = (BINARY, SGA, ECHO)):
+                 client_opts = (BINARY, SGA, ECHO),
+                 vm_uri="vSPC.py"):
         self.vm_name = vm_name
         self.vm_uuid = vm_uuid
+        self.vm_uri = vm_uri
 
         TelnetServer.__init__(self, sock, server_opts, client_opts)
 
@@ -586,10 +600,8 @@ class VMTelnetProxyClient(TelnetServer):
         self.close()
 
     def _send_do_proxy(self):
-        # the server-side part of this only handles server proxy
-        # requests, and requires that serviceURI be vSPC.py, so we need
-        # to send 'S' and 'vSPC.py'.
-        cmd = DO_PROXY + "S".encode("utf-8") + "vSPC.py".encode("utf-8")
+        # send DO_PROXY command and indicate port URI we want to use
+        cmd = DO_PROXY + "S".encode("utf-8") + self.vm_uri.encode("utf-8")
         self._send_vmware(cmd)
 
     def _send_vmware_initial(self):

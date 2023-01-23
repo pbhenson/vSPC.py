@@ -45,6 +45,7 @@ from telnetlib import BINARY, SGA, ECHO
 
 from vSPC.poll import Poller
 from vSPC.telnet import TelnetServer, VMTelnetServer, VMExtHandler, hexdump
+from vSPC import settings
 
 LISTEN_BACKLOG = 128 # match the default SOMAXCONN value to max performance
 
@@ -474,6 +475,13 @@ class vSPC(Poller, VMExtHandler):
         else:
             # Act like we just learned the uuid
             vt.uuid = peer_uuid
+            if settings.SUPPORT_MULTI_CONSOLE:
+                uuid_split = peer_uuid.rsplit("_", 1)
+                if len(uuid_split) < 2:
+                    logging.error("peer uuid appears invalid. didnt find URI suffix")
+                    return False
+                vt.uri = uuid_split[-1]
+                logging.debug("set URI to %s", vt.uri)
             logging.debug("vmotion_peer, calling handle_vc_uuid for %s", vt)
             self.handle_vc_uuid(vt)
 

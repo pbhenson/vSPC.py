@@ -18,6 +18,7 @@ connections terminate
 vSPC.py server
 - Clients can connect using standard telnet, binary mode is negotiated
 automatically
+- Support VMs with multiple serial ports
 
 # Lineage
 
@@ -37,7 +38,7 @@ off to Paul B. Henson (https://github.com/pbhenson) to maintain.
 
 # Requirements
 
-Python 3.5 or greater is required.
+Python 3.6 or greater is required.
 
 Due to the use of epoll in the server implementation, Linux is required.
 There may be other issues associated with using vSPC.py on other OSs, as
@@ -55,11 +56,11 @@ follows:
 ```
     (*) Use Network
       (*) Server
-      Port URI: vSPC.py
+      Port URI: s0
       [X] Use Virtual Serial Port Concentrator:
       vSPC: telnet://hostname:proxy_port
 ```
-NOTE: Direction MUST be Server, and Port URI MUST be vSPC.py. 
+NOTE: Direction MUST be Server.
 
 where hostname is the FQDN (or IP address) of the machine running the
 virtual serial port concentrator, and proxy_port is the port that you've
@@ -69,6 +70,15 @@ TLS/SSL, configure the serial port as above, except for the vSPC field,
 which should specify telnets instead of telnet. For this to work
 correctly, you'll also need to launch the server with the --ssl, --cert,
 and possibly --key options.
+
+An arbitrary string can be chosen for "Port URI", but note that "_" is
+a restricted character. To support VMs with multiple serial ports,
+export the environment variable SUPPORT_MULTI_CONSOLE as "true" to
+enable the feature. This tells the VSPC to automatically add the Port
+URI as a suffix to the VM name and UUID, which yields identifiers that
+are unique per serial port. Port URIs under a single device should be
+unique, but dont need to be unique globally. A suggested convention is
+to choose "s0" for the first serial port, "s1" for the 2nd, etc.
 
 # Running the Concentrator
 

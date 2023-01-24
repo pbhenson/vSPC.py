@@ -63,7 +63,7 @@ class FakeVMClient(Poller):
         # echo back to server
         self.send_buffered(self.tc, s)
         while s:
-            c = s[:100]
+            c = s[:100].decode("utf-8")
             s = s[100:]
             self.destination.write(c)
 

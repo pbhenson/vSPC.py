@@ -41,7 +41,25 @@ import sys
 import threading
 import queue
 
-from vSPC.admin import Q_VERS, Q_NAME, Q_UUID, Q_PORT, Q_OK, Q_VM_NOTFOUND, Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR, Q_LOCK_BAD, Q_LOCK_FAILED
+from vSPC.admin import (
+    Q_VERS,
+    Q_NAME,
+    Q_UUID,
+    Q_PORT,
+    Q_UNSUPPORTED_CMD,
+    Q_CMD_QUERY_VM,
+    Q_CMD_CLEAR_PORT,
+    Q_OK,
+    Q_FAIL,
+    Q_VM_FOUND,
+    Q_VM_NOTFOUND,
+    Q_LOCK_EXCL,
+    Q_LOCK_WRITE,
+    Q_LOCK_FFA,
+    Q_LOCK_FFAR,
+    Q_LOCK_BAD,
+    Q_LOCK_FAILED,
+)
 from vSPC import settings
 
 class vSPCBackendMemory:
@@ -193,6 +211,55 @@ class vSPCBackendMemory:
     def notify_query_socket(self, sock, vspc):
         self.admin_queue.put(lambda: self.handle_query_socket(sock, vspc))
 
+    def handle_cmd_query_vm(self, sock, sockfile, vspc):
+        # command arguments
+        vm_name = pickle.load(sockfile)
+        lock_mode = pickle.load(sockfile)
+
+        vm = self.observed_vm_for_name(vm_name)
+
+        if vm is not None and \
+            lock_mode in (Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR):
+            status = Q_LOCK_FAILED
+            with vm.modification_lock:
+                lock_result = self.try_to_lock_vm(vm, sock.fileno(), lock_mode)
+                if lock_result: status = Q_VM_FOUND
+        elif vm is None:
+            status = Q_VM_NOTFOUND
+        else:
+            status = Q_LOCK_BAD
+        pickle.dump(status, sockfile)
+        sockfile.flush()
+
+        if status == Q_VM_FOUND:
+            pickle.dump(lock_result, sockfile)
+            sockfile.flush()
+            pickle.dump(self.get_seed_data(vm.uuid), sockfile)
+            sockfile.flush()
+            readonly = False
+            if lock_result == Q_LOCK_FFAR:
+                readonly = True
+            vspc.queue_new_admin_client_connection(sock, vm.uuid, readonly)
+        elif status == Q_VM_NOTFOUND:
+            vm_listing = self.format_vm_listing()
+            pickle.dump(len(vm_listing), sockfile)
+            sockfile.flush()
+            for vm in vm_listing:
+                pickle.dump(vm, sockfile)
+                sockfile.flush()
+        else: # unknown lock mode, or lock acquisition failed
+            pass
+
+    def handle_cmd_clear_port(self, sock, sockfile, vspc):
+        port_num = pickle.load(sockfile)
+        status = vspc.clear_port(port_num)
+        if not status:
+            pickle.dump(Q_FAIL, sockfile)
+            sockfile.flush()
+        else:
+            pickle.dump(Q_OK, sockfile)
+            sockfile.flush()
+
     def handle_query_socket(self, sock, vspc):
         sock.settimeout(settings.ADMIN_CONN_TIMEOUT)
         sockfile = sock.makefile("rwb")
@@ -216,47 +283,24 @@ class vSPCBackendMemory:
         logging.debug("version %d query", vers)
 
         try:
-            if vers == 3:
-                vm_name = pickle.load(sockfile)
-                lock_mode = pickle.load(sockfile)
-                vm = self.observed_vm_for_name(vm_name)
-
-                if vm is not None and \
-                   lock_mode in (Q_LOCK_EXCL, Q_LOCK_WRITE, Q_LOCK_FFA, Q_LOCK_FFAR):
-                    status = Q_LOCK_FAILED
-                    with vm.modification_lock:
-                        lock_result = self.try_to_lock_vm(vm, sock.fileno(), lock_mode)
-                        if lock_result: status = Q_OK
-                elif vm is None:
-                    status = Q_VM_NOTFOUND
+            if vers == 4:
+                cmd = pickle.load(sockfile)
+                if cmd == Q_CMD_QUERY_VM:
+                    pickle.dump(Q_OK, sockfile)
+                    sockfile.flush()
+                    self.handle_cmd_query_vm(sock, sockfile, vspc)
+                elif cmd == Q_CMD_CLEAR_PORT:
+                    pickle.dump(Q_OK, sockfile)
+                    sockfile.flush()
+                    self.handle_cmd_clear_port(sock, sockfile, vspc)
                 else:
-                    status = Q_LOCK_BAD
-                pickle.dump(status, sockfile)
-                sockfile.flush()
-
-                if status == Q_OK:
-                    pickle.dump(lock_result, sockfile)
+                    pickle.dump(Q_UNSUPPORTED_CMD, sockfile)
                     sockfile.flush()
-                    pickle.dump(self.get_seed_data(vm.uuid), sockfile)
-                    sockfile.flush()
-                    readonly = False
-                    if lock_result == Q_LOCK_FFAR:
-                        readonly = True
-                    vspc.queue_new_admin_client_connection(sock, vm.uuid, readonly)
-                elif status == Q_VM_NOTFOUND:
-                    vm_listing = self.format_vm_listing()
-                    pickle.dump(len(vm_listing), sockfile)
-                    sockfile.flush()
-                    for vm in vm_listing:
-                        pickle.dump(vm, sockfile)
-                        sockfile.flush()
-                else: # unknown lock mode, or lock acquisition failed
-                    pass
             else:
                 pickle.dump(Exception('No common version'), sockfile)
                 sockfile.flush()
-        except Exception as e:
-            logging.debug('handle_query_socket exception: %s', str(e))
+        except Exception:
+            logging.debug('handle_query_socket exception', exc_info=True)
 
     def format_vm_listing(self):
         vms = self.get_observed_vms()

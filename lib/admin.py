@@ -41,11 +41,16 @@ from vSPC.poll import Poller
 from vSPC.util import prepare_terminal, restore_terminal
 
 # Query protocol
-Q_VERS        = 3
+Q_VERS        = 4
 Q_NAME        = 'name'
 Q_UUID        = 'uuid'
 Q_PORT        = 'port'
-Q_OK          = 'vm_found'
+Q_UNSUPPORTED_CMD = 'cmd_not_supported'
+Q_CMD_QUERY_VM = 'cmd_query_vm'
+Q_CMD_CLEAR_PORT = 'cmd_clear_port'
+Q_OK = 'ok'
+Q_FAIL    = 'fail'
+Q_VM_FOUND          = 'vm_found'
 Q_VM_NOTFOUND = 'vm_not_found'
 # Exclusive write and read access; no other clients have any access to the VM.
 Q_LOCK_EXCL   = "exclusive"
@@ -59,14 +64,17 @@ Q_LOCK_FFAR   = "free_for_all_or_readonly"
 Q_LOCK_BAD    = "lock_invalid"
 Q_LOCK_FAILED = "lock_failed"
 
+ALL_COMMANDS = {Q_CMD_QUERY_VM, Q_CMD_CLEAR_PORT}
+
 CLIENT_ESCAPE_CHAR = chr(29)
 
 class AdminProtocolClient(Poller):
-    def __init__(self, host, admin_port, vm_name, src, dst, lock_mode):
+    def __init__(self, host, admin_port, vm_name, port_to_clear, src, dst, lock_mode):
         Poller.__init__(self)
         self.admin_port = admin_port
         self.host       = host
         self.vm_name    = vm_name
+        self.port_to_clear = port_to_clear
         # needed for the poller to work
         assert hasattr(src, "fileno")
         self.command_source = src
@@ -80,7 +88,72 @@ class AdminProtocolClient(Poller):
             TelnetServer.__init__(self, sock, server_opts, client_opts)
             self.uuid = None
 
-    def connect_to_vspc(self):
+    def do_vm_query(self, sock, sockfile, unpickler):
+        pickle.dump(Q_CMD_QUERY_VM, sockfile)
+        sockfile.flush()
+        status = unpickler.load()
+        if status != Q_OK:
+            sys.stderr.write(f"Error. Asked server to do {Q_CMD_QUERY_VM}. "
+                             f"Expected status of {Q_OK}. Got {status}\n")
+            return False
+
+        pickle.dump(self.vm_name, sockfile)
+        pickle.dump(self.lock_mode, sockfile)
+        sockfile.flush()
+        status = unpickler.load()
+
+        if status == Q_VM_NOTFOUND:
+            if self.vm_name is not None:
+                sys.stderr.write("The host '%s' couldn't find the vm '%s'. "
+                                    "The host knows about the following VMs:\n" % (self.host, self.vm_name))
+            vm_count = unpickler.load()
+            vm_list = [ ]
+            while vm_count > 0:
+                vm_list.append(unpickler.load())
+                vm_count -= 1
+            self.process_noninteractive(vm_list)
+            return False
+        elif status == Q_LOCK_BAD:
+            sys.stderr.write("The host doesn't understand how to give me a write lock\n")
+            return False
+        elif status == Q_LOCK_FAILED:
+            sys.stderr.write("Someone else has a write lock on the VM\n")
+            return False
+
+        assert status == Q_VM_FOUND
+        applied_lock_mode = unpickler.load()
+        if applied_lock_mode == Q_LOCK_FFAR:
+            self.destination.write("Someone else has an exclusive write lock; operating in read-only mode\n")
+        seed_data = unpickler.load()
+
+        for entry in seed_data:
+            self.destination.write(entry)
+
+        return sock
+
+    def do_clear_port(self, sock, sockfile, unpickler):
+        pickle.dump(Q_CMD_CLEAR_PORT, sockfile)
+        sockfile.flush()
+        status = unpickler.load()
+        if status != Q_OK:
+            sys.stderr.write(f"Error. Asked server to do {Q_CMD_CLEAR_PORT}. "
+                             f"Expected status of {Q_OK}. Got {status}\n")
+            return False
+        pickle.dump(self.port_to_clear, sockfile)
+        sockfile.flush()
+        status = unpickler.load()
+        if status != Q_OK:
+            sys.stderr.write(f"{Q_CMD_CLEAR_PORT} failed (status {status})\n")
+            return False
+        else:
+            sys.stderr.write(f"{Q_CMD_CLEAR_PORT} succeeded (status {status})\n")
+            return True
+
+    def run_cmd(self, cmd):
+        if cmd not in ALL_COMMANDS:
+            sys.stderr.write(f"{cmd} is not a supported command\n")
+            return None
+
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((self.host, self.admin_port))
         sockfile = s.makefile("rwb")
@@ -91,47 +164,15 @@ class AdminProtocolClient(Poller):
         pickle.dump(Q_VERS, sockfile)
         sockfile.flush()
         server_vers = int(unpickler.load())
-        if server_vers == 3:
-            pickle.dump(self.vm_name, sockfile)
-            pickle.dump(self.lock_mode, sockfile)
-            sockfile.flush()
-            status = unpickler.load()
-            if status == Q_VM_NOTFOUND:
-                if self.vm_name is not None:
-                    sys.stderr.write("The host '%s' couldn't find the vm '%s'. "
-                                     "The host knows about the following VMs:\n" % (self.host, self.vm_name))
-                vm_count = unpickler.load()
-                vm_list = [ ]
-                while vm_count > 0:
-                    vm_list.append(unpickler.load())
-                    vm_count -= 1
-                self.process_noninteractive(vm_list)
-                return None
-            elif status == Q_LOCK_BAD:
-                sys.stderr.write("The host doesn't understand how to give me a write lock\n")
-                return None
-            elif status == Q_LOCK_FAILED:
-                sys.stderr.write("Someone else has a write lock on the VM\n")
-                return None
-
-            assert status == Q_OK
-            applied_lock_mode = unpickler.load()
-            if applied_lock_mode == Q_LOCK_FFAR:
-                self.destination.write("Someone else has an exclusive write lock; operating in read-only mode\n")
-            seed_data = unpickler.load()
-
-            for entry in seed_data:
-                self.destination.write(entry)
-
-        else:
+        if server_vers != 4:
             sys.stderr.write("Server sent us a version %d response, "
-                             "which we don't understand. Bad!" % vers)
+                             "which we don't understand. Bad!\n" % server_vers)
             return None
 
-        # From this point on, we write data directly to s; the rest of
-        # the protocol doesn't bother with pickle.
-        client = self.Client(sock = s)
-        return client
+        if self.port_to_clear is not None:
+            return self.do_clear_port(s, sockfile, unpickler)
+        else:
+            return self.do_vm_query(s, sockfile, unpickler)
 
     def new_client_data(self, listener):
         """
@@ -238,19 +279,20 @@ class AdminProtocolClient(Poller):
         self.vspc_socket.close()
         sys.exit(0)
 
-    def run(self):
-        s = self.connect_to_vspc()
-        if s is None:
-            return
+    def run(self, cmd=Q_CMD_QUERY_VM):
+        sock = self.run_cmd(cmd)
+        if cmd == Q_CMD_QUERY_VM and isinstance(sock, socket.socket):
+            try:
+                s = self.Client(sock = sock)
+                self.prepare_terminal()
+                self.vspc_socket = s
 
-        try:
-            self.prepare_terminal()
-            self.vspc_socket = s
-
-            self.add_reader(self.vspc_socket, self.new_server_data)
-            self.add_reader(self.command_source, self.new_client_data)
-            self.run_forever()
-        except Exception as e:
-            sys.stderr.write("".join(traceback.TracebackException.from_exception(e).format()))
-        finally:
-            self.quit()
+                self.add_reader(self.vspc_socket, self.new_server_data)
+                self.add_reader(self.command_source, self.new_client_data)
+                self.run_forever()
+            except (BrokenPipeError, ConnectionResetError):
+                sys.stderr.write("Connection was closed!")
+            except Exception as e:
+                sys.stderr.write("".join(traceback.TracebackException.from_exception(e).format()))
+            finally:
+                self.quit()

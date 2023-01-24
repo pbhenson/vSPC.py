@@ -34,8 +34,12 @@ from vSPC.admin import AdminProtocolClient, Q_LOCK_FFAR, Q_LOCK_FFA, Q_LOCK_WRIT
 ADMIN_PORT = 13371
 
 def do_query(host, port, vm_name, lock_mode):
-    client = AdminProtocolClient(host, port, vm_name, sys.stdin, sys.stdout, lock_mode)
-    client.run()
+    client = AdminProtocolClient(host, port, vm_name, None, sys.stdin, sys.stdout, lock_mode)
+    client.run("cmd_query_vm")
+
+def do_clear_line(host, port, port_to_clear, lock_mode):
+    client = AdminProtocolClient(host, port, None, port_to_clear, sys.stdin, sys.stdout, lock_mode)
+    client.run("cmd_clear_port")
 
 def check_lock_mode(option, opt_str, value, parser):
     client_lock_mode = value
@@ -71,6 +75,8 @@ def main():
                       help="log to stdout instead of syslog")
     parser.add_option("-s", dest='remote_host', default="localhost",
                       help="vSPC server to connect to (default localhost)")
+    parser.add_option("-p", dest='port_to_clear', type=int,
+                      help="Port to clear (if performing clear port command)")
 
     (options, args) = parser.parse_args()
 
@@ -95,8 +101,14 @@ def main():
     if len(args) == 1:
         vm_name = args[0]
 
-    return do_query(options.remote_host, options.admin_port, vm_name,
-                    options.client_lock_mode)
+    # TODO: use subparsers for the different commands, instead of mixing them
+    # together like this
+    if options.port_to_clear is not None:
+        return do_clear_line(options.remote_host, options.admin_port,
+                             options.port_to_clear, options.client_lock_mode)
+    else:
+        return do_query(options.remote_host, options.admin_port, vm_name,
+                        options.client_lock_mode)
 
 if __name__ == '__main__':
     sys.exit(main())

@@ -19,6 +19,10 @@ vSPC.py server
 - Clients can connect using standard telnet, binary mode is negotiated
 automatically
 - Support VMs with multiple serial ports
+- Support limiting the number of clients which can connect to a VM, e.g.
+you can allow only one client to be connected to a VM at a time
+- Support port clear command through admin interface, which disconnects
+all clients for a VM
 
 # Lineage
 

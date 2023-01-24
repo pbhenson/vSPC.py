@@ -633,6 +633,27 @@ class vSPC(Poller, VMExtHandler):
         vm.listener = openport(vm.port, self.vm_iface)
         self.add_reader(vm, self.queue_new_client_connection)
 
+    def clear_port(self, port_num):
+        """
+        Disconnect all the clients connected to the VM whose port
+        number is 'port_num'
+        """
+        if self.vm_port_next is None:
+            return False
+
+        with self.ports_lock:
+            uuid = self.ports.get(port_num)
+            if uuid is None:
+                logging.debug("port %d appears to not be in use", port_num)
+                return False
+            vm = self.vms.get(uuid)
+            if vm is None:
+                logging.debug("could not find VM with uuid %s", uuid)
+                return False
+            for client in vm.clients:
+                self.abort_client_connection(client)
+        return True
+
     def create_old_vms(self, vms):
         for vm in vms:
             self.new_vm(uuid = vm.uuid, name = vm.name, port = vm.port)

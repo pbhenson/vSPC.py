@@ -107,11 +107,11 @@ class vSPC(Poller, VMExtHandler):
         self.admin_iface = admin_iface
         if not vm_port_start: # account for falsey things, not just None
             vm_port_start = None
-        self.vm_port_next = vm_port_start
+        self.vm_port_start = vm_port_start
         self.vm_expire_time = vm_expire_time
         self.backend = backend
 
-        # should be held when modifying self.vm_port_next or self.ports
+        # should be held when modifying self.ports
         self.ports_lock = threading.Lock()
 
         self.orphans = []
@@ -566,14 +566,17 @@ class vSPC(Poller, VMExtHandler):
                 self.orphans.remove(uuid)
                 continue
             vm = self.vms[uuid]
+            expire_time = vm.last_time + self.vm_expire_time
+            remaining_time = expire_time - t
 
             if not self.check_orphan(vm):
+                logging.debug("%s is no longer an orphan", vm)
                 self.orphans.remove(uuid) # Orphan no longer
-                continue
-            elif vm.last_time + self.vm_expire_time > t:
-                continue
-
-            self.expire_orphan(vm)
+            elif remaining_time > 0:
+                logging.debug("expire time for %s is in %ds", vm, remaining_time)
+            else:
+                logging.debug("expire time for %s was %ds ago", vm, remaining_time)
+                self.expire_orphan(vm)
 
         # if the number of connections is above our soft limit and we have
         # orphans, collect enough to drop it below that limit, oldest first
@@ -605,8 +608,7 @@ class vSPC(Poller, VMExtHandler):
         self.delete_stream(vm)
         del vm.listener
         with self.ports_lock:
-            if self.vm_port_next is not None:
-                self.vm_port_next = min(vm.port, self.vm_port_next)
+            if self.vm_port_start is not None:
                 del self.ports[vm.port]
         del self.vms[vm.uuid]
         if vm.vmotion:
@@ -617,18 +619,16 @@ class vSPC(Poller, VMExtHandler):
     def open_vm_port(self, vm, port):
         self.collect_orphans()
 
-        if self.vm_port_next is None:
+        if self.vm_port_start is None:
             return
 
         with self.ports_lock:
             if port:
                 vm.port = port
             else:
-                p = self.vm_port_next
+                p = self.vm_port_start
                 while p in self.ports:
                     p += 1
-
-                self.vm_port_next = p + 1
                 vm.port = p
 
             assert not vm.port in self.ports
@@ -642,7 +642,7 @@ class vSPC(Poller, VMExtHandler):
         Disconnect all the clients connected to the VM whose port
         number is 'port_num'
         """
-        if self.vm_port_next is None:
+        if self.vm_port_start is None:
             return False
 
         with self.ports_lock:
@@ -666,9 +666,9 @@ class vSPC(Poller, VMExtHandler):
         logging.info('Starting vSPC on proxy iface %s port %d, admin iface %s '
                      'port %d', self.proxy_iface, self.proxy_port,
                      self.admin_iface, self.admin_port)
-        if self.vm_port_next is not None:
+        if self.vm_port_start is not None:
             logging.info("Allocating VM ports starting at %d on interface %s",
-                         self.vm_port_next, self.vm_iface)
+                         self.vm_port_start, self.vm_iface)
 
         self.create_old_vms(self.backend.get_observed_vms())
 

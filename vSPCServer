@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright 2011 Kevan A. Carstensen. All Rights Reserved
 # Adapted from code written by Zach M. Loafman, copyright 2011 Isilon Systems.
@@ -118,7 +118,7 @@ def main():
     if "--backend" in sys.argv:
         try:
             backend_type = sys.argv[sys.argv.index("--backend") + 1]
-        except:
+        except Exception:
             pass
 
     backend = get_backend_type(backend_type)()
@@ -171,8 +171,12 @@ def main():
 
     (options, args) = parser.parse_args()
 
+    logger_format = "%(asctime)s %(levelname)-5s [%(filename)s:%(lineno)d] %(message)s"
+    log_level = logging.DEBUG if options.debug else logging.INFO
+    logging.basicConfig(level=log_level, format=logger_format)
+
     logger = logging.getLogger('')
-    logger.setLevel(logging.DEBUG if options.debug else logging.INFO)
+    logger.setLevel(log_level)
     if options.syslog and not options.debug:
         from logging.handlers import SysLogHandler
         from logging import Formatter
@@ -213,7 +217,7 @@ def main():
         logging.info("Shutdown requested on keyboard, exiting")
         backend.shutdown()
         return 0
-    except Exception as e:
+    except Exception:
         logging.exception("Top level exception caught")
         backend.shutdown()
         return 1

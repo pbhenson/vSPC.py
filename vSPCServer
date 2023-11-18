@@ -151,9 +151,6 @@ def main():
                       help="Don't daemonize")
     parser.add_option("--backend", dest='backend_type_name', default='Memory',
                       help="Name of custom backend class")
-    parser.add_option("-f", "--persist-file", dest="persist_file",
-                      help="DBM file prefix to persist mappings to (.dat/.dir may follow. "
-                      "This is shorthand for --backend File --file FILE.")
     parser.add_option("--ssl", action='store_true', default=False,
                       help='Start SSL/TLS on connections to the proxy port')
     parser.add_option("--cert", default=None,

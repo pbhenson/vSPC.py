@@ -182,6 +182,9 @@ class Poller:
             except IOError as e:
                 if e.errno != errno.EBADF:
                     raise
+            except KeyError as e:
+                logging.info("delete_stream: not found")
+
 
     def unsafe_remove_fd(self, fd):
         """

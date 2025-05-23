@@ -49,9 +49,12 @@ if __name__ == '__main__':
     vspc_host = args[0]
     vspc_port = int(args[1])
 
-    logger = logging.getLogger('')
+    logger_format = "%(asctime)s %(levelname)-5s [%(filename)s:%(lineno)d] %(message)s"
+    log_level = logging.DEBUG if options.debug else logging.INFO
+    logging.basicConfig(level=log_level, format=logger_format)
 
-    logger.setLevel(logging.DEBUG if options.debug else logging.INFO)
+    logger = logging.getLogger('')
+    logger.setLevel(log_level)
 
     fvm = FakeVMClient(sys.stdin, sys.stdout, options.vm_name, options.vm_uid)
     fvm.connect(vspc_host, vspc_port)
